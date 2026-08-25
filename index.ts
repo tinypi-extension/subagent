@@ -58,8 +58,8 @@ const ChainItem = Type.Object({
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
-	description: 'Which agent directories to use. Default: "project". Use "user" or "both" to broaden the scope.',
-	default: "project",
+	description: 'Which agent directories to use. Default: "both" (user agents plus project agents; project agents win name conflicts). Use "user" or "project" to restrict discovery.',
+	default: "both",
 });
 
 const SubagentParams = Type.Object({
@@ -82,8 +82,8 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-			`Default agent scope is "project": project-local agents from ${CONFIG_DIR_NAME}/agents.`,
-			`Use agentScope="user" or "both" for user agents from ${path.join(getAgentDir(), "agents")}.`,
+			`Default agent scope is "both" (recommended): user agents from ${path.join(getAgentDir(), "agents")} plus project-local agents from ${CONFIG_DIR_NAME}/agents (project agents win name conflicts).`,
+			`Other options is "user" and "project"`,
 			`Profiles: ${registeredProfileSummary}. ${registeredProfileNames.length > 0
 				? "Pass one of these names per task to control the subagent's model and thinking; omit to use the agent's own model/settings."
 				: "Omit the profile parameter and let the agent use its own model/settings."
@@ -104,7 +104,7 @@ export default function (pi: ExtensionAPI) {
 		parameters: SubagentParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
-			const agentScope: AgentScope = params.agentScope ?? "project";
+			const agentScope: AgentScope = params.agentScope ?? "both";
 			const discovery = discoverAgents(ctx.cwd, agentScope);
 
 			return executeDispatch(ctx, params, signal, onUpdate, agentScope, discovery);
