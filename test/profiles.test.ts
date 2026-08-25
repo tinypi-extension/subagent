@@ -43,6 +43,15 @@ test("loadProfilesFrom handles missing file and non-object subagent", () => {
   assert.deepEqual(loadProfilesFrom(f), {});
 });
 
+test("loadProfilesFrom treats a profile named __proto__ as an own key without polluting the prototype", () => {
+  const f = tmpFile(`{"subagent":{"profiles":{"__proto__":{"thinking":"off"}}}}`);
+  const p = loadProfilesFrom(f);
+  assert.equal(Object.hasOwn(p, "__proto__"), true);
+  assert.equal(Object.getPrototypeOf(p), null);
+  assert.deepEqual(Object.keys(p), ["__proto__"]);
+  assert.deepEqual(p["__proto__"], { thinking: "off" });
+});
+
 test("resolveProfile full chain: profile -> agent -> parent", () => {
   // profile present (both)
   assert.deepEqual(
@@ -68,4 +77,12 @@ test("validateProfiles returns unique invalid names", () => {
   assert.deepEqual(validateProfiles(["low", "high"], available), []);
   assert.deepEqual(validateProfiles([undefined, "low"], available), []);
   assert.deepEqual(validateProfiles(["low", "turbo", "turbo"], available), ["turbo"]);
+});
+
+test("validateProfiles rejects prototype-chain names that are not own keys", () => {
+  assert.deepEqual(validateProfiles(["toString"], {}), ["toString"]);
+  assert.deepEqual(validateProfiles(["constructor", "__proto__"], { low: {} }), ["constructor", "__proto__"]);
+  // but an own key with a prototype-ish name still validates
+  const available: Record<string, SubagentProfile> = { toString: {} };
+  assert.deepEqual(validateProfiles(["toString"], available), []);
 });

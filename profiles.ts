@@ -38,7 +38,7 @@ export function loadProfilesFrom(file: string): Record<string, SubagentProfile> 
   }
   const profiles = (raw as { subagent?: { profiles?: unknown } } | null)?.subagent?.profiles;
   if (typeof profiles !== "object" || profiles === null) return {};
-  const out: Record<string, SubagentProfile> = {};
+  const out = Object.create(null) as Record<string, SubagentProfile>;
   for (const [name, def] of Object.entries(profiles as Record<string, unknown>)) {
     const p = parseProfile(def);
     if (p) out[name] = p;
@@ -63,7 +63,7 @@ export function validateProfiles(
     if (name === undefined) continue;
     if (seen.has(name)) continue;
     seen.add(name);
-    if (!(name in available)) invalid.push(name);
+    if (!Object.hasOwn(available, name)) invalid.push(name);
   }
   return invalid;
 }
