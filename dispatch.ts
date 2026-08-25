@@ -7,6 +7,12 @@
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { AgentConfig, AgentDiscoveryResult } from "./agents.ts";
 import {
+	loadProfiles,
+	resolveProfile,
+	validateProfiles,
+	type SubagentProfile,
+} from "./profiles.ts";
+import {
 	getFinalOutput,
 	getResultOutput,
 	isFailedResult,
@@ -27,8 +33,9 @@ import {
 export interface DispatchParams {
 	agent?: string;
 	task?: string;
-	tasks?: { agent: string; task: string; cwd?: string }[];
-	chain?: { agent: string; task: string; cwd?: string }[];
+	profile?: string;
+	tasks?: { agent: string; task: string; profile?: string; cwd?: string }[];
+	chain?: { agent: string; task: string; profile?: string; cwd?: string }[];
 	agentScope?: "user" | "project" | "both";
 	confirmProjectAgents?: boolean;
 	cwd?: string;
@@ -41,13 +48,19 @@ export async function executeDispatch(
 	onUpdate: OnUpdateCallback | undefined,
 	agentScope: "user" | "project" | "both",
 	discovery: AgentDiscoveryResult,
+	profiles: Record<string, SubagentProfile> = loadProfiles(ctx.cwd, ctx.isProjectTrusted()),
 ): Promise<AgentToolResult<SubagentDetails>> {
 	const agents = discovery.agents;
 	const confirmProjectAgents = params.confirmProjectAgents ?? true;
 
-	const dispatchDefaults: DispatchDefaults = {
+	const parentDefaults: DispatchDefaults = {
 		model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
 		thinkingLevel: ctx.thinkingLevel,
+	};
+
+	const resolveFor = (agentName: string | undefined, profileName: string | undefined): DispatchDefaults => {
+		const agentConfig = agentName ? agents.find((a) => a.name === agentName) : undefined;
+		return resolveProfile(profileName ? profiles[profileName] : undefined, agentConfig, parentDefaults);
 	};
 
 	const hasChain = (params.chain?.length ?? 0) > 0;
@@ -63,6 +76,23 @@ export async function executeDispatch(
 			projectAgentsDir: discovery.projectAgentsDir,
 			results,
 		});
+
+	const requestedProfiles: (string | undefined)[] = [];
+	if (params.chain) for (const s of params.chain) requestedProfiles.push(s.profile);
+	if (params.tasks) for (const t of params.tasks) requestedProfiles.push(t.profile);
+	requestedProfiles.push(params.profile);
+	const invalid = validateProfiles(requestedProfiles, profiles);
+	if (invalid.length > 0) {
+		const validNames = Object.keys(profiles).join(", ") || "none";
+		return {
+			content: [{
+				type: "text",
+				text: `Unknown subagent profile(s): ${invalid.join(", ")}. Available profiles: ${validNames}.`,
+			}],
+			details: makeDetails("single")([]),
+			isError: true,
+		} as AgentToolResult<SubagentDetails>;
+	}
 
 	if (modeCount !== 1) {
 		const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
@@ -117,7 +147,7 @@ export async function executeDispatch(
 
 			const result = await runSingleAgent(
 				ctx.cwd,
-				dispatchDefaults,
+				resolveFor(step.agent, step.profile),
 				agents,
 				step.agent,
 				taskWithContext,
@@ -188,7 +218,7 @@ export async function executeDispatch(
 		const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
 			const result = await runSingleAgent(
 				ctx.cwd,
-				dispatchDefaults,
+				resolveFor(t.agent, t.profile),
 				agents,
 				t.agent,
 				t.task,
@@ -231,7 +261,7 @@ export async function executeDispatch(
 	if (params.agent && params.task) {
 		const result = await runSingleAgent(
 			ctx.cwd,
-			dispatchDefaults,
+			resolveFor(params.agent, params.profile),
 			agents,
 			params.agent,
 			params.task,
