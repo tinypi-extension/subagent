@@ -148,6 +148,7 @@ export async function executeDispatch(
 			const result = await runSingleAgent(
 				ctx.cwd,
 				resolveFor(step.agent, step.profile),
+				step.profile,
 				agents,
 				step.agent,
 				taskWithContext,
@@ -219,6 +220,7 @@ export async function executeDispatch(
 			const result = await runSingleAgent(
 				ctx.cwd,
 				resolveFor(t.agent, t.profile),
+				t.profile,
 				agents,
 				t.agent,
 				t.task,
@@ -262,6 +264,7 @@ export async function executeDispatch(
 		const result = await runSingleAgent(
 			ctx.cwd,
 			resolveFor(params.agent, params.profile),
+			params.profile,
 			agents,
 			params.agent,
 			params.task,

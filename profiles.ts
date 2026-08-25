@@ -46,6 +46,27 @@ export function loadProfilesFrom(file: string): Record<string, SubagentProfile> 
   return out;
 }
 
+/**
+ * Render the available profiles as a compact human-readable list so the LLM
+ * can pick one by name without reading settings.json.
+ *
+ * e.g. "low (model=anthropic/claude-3.5-haiku, thinking=off), high (thinking=medium)"
+ * or "no profiles defined" when the map is empty.
+ */
+export function formatProfileSummary(profiles: Record<string, SubagentProfile>): string {
+  const names = Object.keys(profiles);
+  if (names.length === 0) return "no profiles defined";
+  return names
+    .map((n) => {
+      const p = profiles[n];
+      const parts: string[] = [];
+      if (p.model) parts.push(`model=${p.model}`);
+      if (p.thinking) parts.push(`thinking=${p.thinking}`);
+      return parts.length ? `${n} (${parts.join(", ")})` : n;
+    })
+    .join(", ");
+}
+
 export function loadProfiles(cwd: string, projectTrusted: boolean): Record<string, SubagentProfile> {
   const global = loadProfilesFrom(path.join(getAgentDir(), "settings.json"));
   if (!projectTrusted) return global;

@@ -8,6 +8,7 @@ import {
   loadProfilesFrom,
   resolveProfile,
   validateProfiles,
+  formatProfileSummary,
   type SubagentProfile,
 } from "../profiles.ts";
 import type { DispatchDefaults } from "../types.ts";
@@ -70,6 +71,18 @@ test("resolveProfile full chain: profile -> agent -> parent", () => {
   assert.deepEqual(resolveProfile({ thinking: "off" }, { model: "ag/m" }, PARENT), { model: "ag/m", thinkingLevel: "off" });
   // no model anywhere
   assert.deepEqual(resolveProfile(undefined, undefined, {}), {});
+});
+
+test("formatProfileSummary renders readable list and empty fallback", () => {
+  assert.equal(formatProfileSummary({}), "no profiles defined");
+  assert.equal(
+    formatProfileSummary({
+      low: { model: "a/x", thinking: "off" },
+      high: { thinking: "medium" },
+      bare: {},
+    }),
+    "low (model=a/x, thinking=off), high (thinking=medium), bare",
+  );
 });
 
 test("validateProfiles returns unique invalid names", () => {

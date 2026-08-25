@@ -15,7 +15,7 @@ import {
 	getFinalOutput,
 	isFailedResult,
 } from "./format.ts";
-import { COLLAPSED_ITEM_COUNT, type DisplayItem, type SubagentDetails } from "./types.ts";
+import { COLLAPSED_ITEM_COUNT, type DisplayItem, type SingleResult, type SubagentDetails } from "./types.ts";
 
 /** Minimal theme surface the renderers rely on. */
 export interface Theme {
@@ -24,6 +24,12 @@ export interface Theme {
 }
 
 const getScope = (args: DispatchParams): string => args.agentScope ?? "both";
+
+/** Unique subagent profiles used across the given results, joined for display. */
+const aggregateProfiles = (results: SingleResult[]): string => {
+	const names = [...new Set(results.map((r) => r.profile).filter((p): p is string => Boolean(p)))];
+	return names.join(", ");
+};
 
 export function renderCall(args: DispatchParams, theme: Theme, _context?: unknown) {
 	const scope = getScope(args);
@@ -136,7 +142,7 @@ export function renderResult(
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
 			}
-			const usageStr = formatUsageStats(r.usage, r.model);
+			const usageStr = formatUsageStats(r.usage, r.model, r.profile);
 			if (usageStr) {
 				container.addChild(new Spacer(1));
 				container.addChild(new Text(theme.fg("dim", usageStr), 0, 0));
@@ -152,7 +158,7 @@ export function renderResult(
 			text += `\n${renderDisplayItems(displayItems, COLLAPSED_ITEM_COUNT)}`;
 			if (displayItems.length > COLLAPSED_ITEM_COUNT) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
 		}
-		const usageStr = formatUsageStats(r.usage, r.model);
+		const usageStr = formatUsageStats(r.usage, r.model, r.profile);
 		if (usageStr) text += `\n${theme.fg("dim", usageStr)}`;
 		return new Text(text, 0, 0);
 	}
@@ -166,9 +172,9 @@ export function renderResult(
 			container.addChild(
 				new Text(
 					icon +
-						" " +
-						theme.fg("toolTitle", theme.bold("chain ")) +
-						theme.fg("accent", `${successCount}/${details.results.length} steps`),
+					" " +
+					theme.fg("toolTitle", theme.bold("chain ")) +
+					theme.fg("accent", `${successCount}/${details.results.length} steps`),
 					0,
 					0,
 				),
@@ -208,11 +214,11 @@ export function renderResult(
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
 
-				const stepUsage = formatUsageStats(r.usage, r.model);
+				const stepUsage = formatUsageStats(r.usage, r.model, r.profile);
 				if (stepUsage) container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
 			}
 
-			const usageStr = formatUsageStats(aggregateUsage(details.results));
+			const usageStr = formatUsageStats(aggregateUsage(details.results), undefined, undefined);
 			if (usageStr) {
 				container.addChild(new Spacer(1));
 				container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
@@ -233,7 +239,7 @@ export function renderResult(
 			if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
 			else text += `\n${renderDisplayItems(displayItems, 5)}`;
 		}
-		const usageStr = formatUsageStats(aggregateUsage(details.results));
+		const usageStr = formatUsageStats(aggregateUsage(details.results), undefined, undefined);
 		if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
 		text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
 		return new Text(text, 0, 0);
@@ -293,11 +299,11 @@ export function renderResult(
 					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 				}
 
-				const taskUsage = formatUsageStats(r.usage, r.model);
+				const taskUsage = formatUsageStats(r.usage, r.model, r.profile);
 				if (taskUsage) container.addChild(new Text(theme.fg("dim", taskUsage), 0, 0));
 			}
 
-			const usageStr = formatUsageStats(aggregateUsage(details.results));
+			const usageStr = formatUsageStats(aggregateUsage(details.results), undefined, undefined);
 			if (usageStr) {
 				container.addChild(new Spacer(1));
 				container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
@@ -321,7 +327,7 @@ export function renderResult(
 			else text += `\n${renderDisplayItems(displayItems, 5)}`;
 		}
 		if (!isRunning) {
-			const usageStr = formatUsageStats(aggregateUsage(details.results));
+			const usageStr = formatUsageStats(aggregateUsage(details.results), undefined, undefined);
 			if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
 		}
 		if (!expanded) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;

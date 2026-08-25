@@ -66,6 +66,7 @@ function emptyUsage(): SingleResult["usage"] {
 export async function runSingleAgent(
 	defaultCwd: string,
 	dispatchDefaults: DispatchDefaults,
+	profileName: string | undefined,
 	agents: AgentConfig[],
 	agentName: string,
 	task: string,
@@ -108,6 +109,7 @@ export async function runSingleAgent(
 		stderr: "",
 		usage: emptyUsage(),
 		model: dispatchDefaults.model,
+		profile: profileName,
 		step,
 	};
 

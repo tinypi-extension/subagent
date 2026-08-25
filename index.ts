@@ -27,20 +27,34 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { type AgentScope, discoverAgents } from "./agents.ts";
 import { executeDispatch, type DispatchParams } from "./dispatch.ts";
+import { formatProfileSummary, loadProfilesFrom } from "./profiles.ts";
 import { renderCall, renderResult, type Theme } from "./render.ts";
+
+// Bake the actually-defined subagent profiles into the tool's description and
+// parameter hints at load time, so the model knows what profiles exist without
+// having to read settings.json. Global config is stable here; project-level
+// profiles (loaded per-session in dispatch.ts) may add or override these, which
+// the description notes so the model doesn't assume this list is exhaustive.
+const registeredGlobalProfiles = loadProfilesFrom(path.join(getAgentDir(), "settings.json"));
+const registeredProfileNames = Object.keys(registeredGlobalProfiles);
+const registeredProfileSummary = formatProfileSummary(registeredGlobalProfiles);
+const profileHint =
+	registeredProfileNames.length === 0
+		? "No subagent profiles are defined, so omit the profile parameter and let the agent use its own model/settings."
+		: `Currently available profile(s): ${registeredProfileSummary}. Pick one by name; also check project-level .pi/settings.json for any additional/overriding profiles.`;
 
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-	profile: Type.Optional(Type.String({ description: "Execution profile (model+thinking) from settings subagent.profiles, e.g. 'low'|'medium'|'high'|'expert'. Omit to use the agent's own model or the current settings." })),
+	profile: Type.Optional(Type.String({ description: `Execution profile (model+thinking). ${profileHint}` })),
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-	profile: Type.Optional(Type.String({ description: "Execution profile (model+thinking) from settings subagent.profiles, e.g. 'low'|'medium'|'high'|'expert'. Omit to use the agent's own model or the current settings." })),
+	profile: Type.Optional(Type.String({ description: `Execution profile (model+thinking). ${profileHint}` })),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -52,7 +66,7 @@ const SubagentParams = Type.Object({
 	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
 	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
-	profile: Type.Optional(Type.String({ description: "Execution profile for this single task (see subagent.profiles in settings). Omit to fall back." })),
+	profile: Type.Optional(Type.String({ description: `Execution profile for this single task. ${profileHint}` })),
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
@@ -68,13 +82,25 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-			`Default agent scope is "project" (recommend): project-local agents from ${CONFIG_DIR_NAME}/agents.`,
+			`Default agent scope is "project": project-local agents from ${CONFIG_DIR_NAME}/agents.`,
 			`Use agentScope="user" or "both" for user agents from ${path.join(getAgentDir(), "agents")}.`,
-			"Profiles (model + thinking level) are defined in settings.json under subagent.profiles (e.g. low/medium/high/expert); pass one per task to control the subagent's model and thinking. Omit to use the agent's own model, then the current model/settings."
+			`Profiles: ${registeredProfileSummary}. ${registeredProfileNames.length > 0
+				? "Pass one of these names per task to control the subagent's model and thinking; omit to use the agent's own model/settings."
+				: "Omit the profile parameter and let the agent use its own model/settings."
+			}]`,
 		].join(" "),
-		promptGuidelines: [
-			"Use subagent profile='low' for simple lookups/quick tasks, 'medium' for default work, 'high' for complex reasoning, 'expert' for the hardest architectural/novel problems. Profiles are defined in settings.json subagent.profiles.",
-		],
+		promptGuidelines: (() => {
+			const pick = (() => {
+				if (registeredProfileNames.length === 0) {
+					return "No subagent profiles are defined, so do not pass a profile parameter; each subagent uses its own model/settings.";
+				}
+				return `Available subagent profile(s): ${registeredProfileSummary}. Pick one by name (${registeredProfileNames.join("/")}); omit profile to let the agent use its own model/settings.`;
+			})();
+			return [
+				pick,
+				"Project-level .pi/settings.json may define additional or overriding profiles beyond this global list, so the full set is resolved per-session.",
+			];
+		})(),
 		parameters: SubagentParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {

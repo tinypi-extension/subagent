@@ -30,6 +30,7 @@ export interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
+	profile?: string;
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
