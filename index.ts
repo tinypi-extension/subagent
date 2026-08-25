@@ -33,12 +33,14 @@ const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	profile: Type.Optional(Type.String({ description: "Execution profile (model+thinking) from settings subagent.profiles, e.g. 'low'|'medium'|'high'|'expert'. Omit to use the agent's own model or the current settings." })),
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	profile: Type.Optional(Type.String({ description: "Execution profile (model+thinking) from settings subagent.profiles, e.g. 'low'|'medium'|'high'|'expert'. Omit to use the agent's own model or the current settings." })),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -50,6 +52,7 @@ const SubagentParams = Type.Object({
 	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
 	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
+	profile: Type.Optional(Type.String({ description: "Execution profile for this single task (see subagent.profiles in settings). Omit to fall back." })),
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
@@ -66,9 +69,12 @@ export default function (pi: ExtensionAPI) {
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
 			`Default agent scope is "project" (recommend): project-local agents from ${CONFIG_DIR_NAME}/agents.`,
-			`Use agentScope="user" or "both" for user agents from ${path.join(getAgentDir(), "agents")}.`
-			// `To limit discovery, set agentScope to "user" or "project".`,
+			`Use agentScope="user" or "both" for user agents from ${path.join(getAgentDir(), "agents")}.`,
+			"Profiles (model + thinking level) are defined in settings.json under subagent.profiles (e.g. low/medium/high/expert); pass one per task to control the subagent's model and thinking. Omit to use the agent's own model, then the current model/settings."
 		].join(" "),
+		promptGuidelines: [
+			"Use subagent profile='low' for simple lookups/quick tasks, 'medium' for default work, 'high' for complex reasoning, 'expert' for the hardest architectural/novel problems. Profiles are defined in settings.json subagent.profiles.",
+		],
 		parameters: SubagentParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
