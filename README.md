@@ -132,11 +132,12 @@ Use a prompt with `@` (Pass-by-Reference) to inject your task, e.g. `Prompt file
 
 ### Profiles
 
-Define named **execution profiles** in `settings.json` under the `subagent.profiles` key — globally in `~/.pi/agent/settings.json` and optionally per-project in `.pi/settings.json` (project wins a name conflict, gated on project trust). Each profile sets `model` and/or `thinking`, where `thinking` is one of `off | minimal | low | medium | high | xhigh | max`.
+The extension is disabled by default. Enable it by setting `subagent.enableProfiles` to the boolean `true` in the global `~/.pi/agent/settings.json`:
 
 ```json
 {
   "subagent": {
+    "enableProfiles": true,
     "profiles": {
       "fast":  { "model": "oc-openai/deepseek-v4-flash", "thinking": "off" },
       "high":  { "model": "oc-openai/deepseek-v4-pro",   "thinking": "medium" }
@@ -144,6 +145,8 @@ Define named **execution profiles** in `settings.json` under the `subagent.profi
   }
 }
 ```
+
+The `subagent` tool is not registered when `enableProfiles` is missing, `false`, or any value other than the boolean `true`. Named **execution profiles** can be defined under `subagent.profiles` globally and optionally per-project in `.pi/settings.json` (project profiles win name conflicts, gated on project trust). Each profile sets `model` and/or `thinking`, where `thinking` is one of `off | minimal | low | medium | high | xhigh | max`.
 
 A task selects one via its `profile` param. Resolution/fallback per task (`profiles.ts` / `dispatch.ts`):
 
