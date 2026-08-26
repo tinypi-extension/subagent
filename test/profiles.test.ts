@@ -9,6 +9,7 @@ import {
   resolveProfile,
   validateProfiles,
   formatProfileSummary,
+  isProfilesEnabled,
   type SubagentProfile,
 } from "../profiles.ts";
 import type { DispatchDefaults } from "../types.ts";
@@ -21,6 +22,14 @@ function tmpFile(contents: string): string {
 }
 
 const PARENT: DispatchDefaults = { model: "p/react", thinkingLevel: "medium" };
+
+test("isProfilesEnabled requires an explicit true tag", () => {
+  assert.equal(isProfilesEnabled(tmpFile(JSON.stringify({ subagent: { enableProfiles: true } }))), true);
+  assert.equal(isProfilesEnabled(tmpFile(JSON.stringify({ subagent: { enableProfiles: false } }))), false);
+  assert.equal(isProfilesEnabled(tmpFile(JSON.stringify({ subagent: {} }))), false);
+  assert.equal(isProfilesEnabled(tmpFile(JSON.stringify({ subagent: { enableProfiles: "true" } }))), false);
+  assert.equal(isProfilesEnabled(tmpFile("not json")), false);
+});
 
 test("loadProfilesFrom parses valid profiles and drops malformed ones", () => {
   const f = tmpFile(JSON.stringify({

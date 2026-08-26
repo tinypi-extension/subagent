@@ -18,6 +18,18 @@ function isThinkingLevel(v: unknown): v is ThinkingLevel {
   return typeof v === "string" && VALID_THINKING.has(v);
 }
 
+export function isProfilesEnabled(file: string): boolean {
+  if (!fs.existsSync(file)) return false;
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, "utf-8")) as {
+      subagent?: { enableProfiles?: unknown };
+    };
+    return raw?.subagent?.enableProfiles === true;
+  } catch {
+    return false;
+  }
+}
+
 function parseProfile(raw: unknown): SubagentProfile | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const r = raw as Record<string, unknown>;

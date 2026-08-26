@@ -27,7 +27,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { type AgentScope, discoverAgents } from "./agents.ts";
 import { executeDispatch, type DispatchParams } from "./dispatch.ts";
-import { formatProfileSummary, loadProfilesFrom } from "./profiles.ts";
+import { formatProfileSummary, isProfilesEnabled, loadProfilesFrom } from "./profiles.ts";
 import { renderCall, renderResult, type Theme } from "./render.ts";
 
 // Bake the actually-defined subagent profiles into the tool's description and
@@ -35,7 +35,9 @@ import { renderCall, renderResult, type Theme } from "./render.ts";
 // having to read settings.json. Global config is stable here; project-level
 // profiles (loaded per-session in dispatch.ts) may add or override these, which
 // the description notes so the model doesn't assume this list is exhaustive.
-const registeredGlobalProfiles = loadProfilesFrom(path.join(getAgentDir(), "settings.json"));
+const globalSettingsPath = path.join(getAgentDir(), "settings.json");
+const profilesEnabled = isProfilesEnabled(globalSettingsPath);
+const registeredGlobalProfiles = loadProfilesFrom(globalSettingsPath);
 const registeredProfileNames = Object.keys(registeredGlobalProfiles);
 const registeredProfileSummary = formatProfileSummary(registeredGlobalProfiles);
 const profileHint =
@@ -76,6 +78,8 @@ const SubagentParams = Type.Object({
 });
 
 export default function (pi: ExtensionAPI) {
+	if (!profilesEnabled) return;
+
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
@@ -94,7 +98,7 @@ export default function (pi: ExtensionAPI) {
 				if (registeredProfileNames.length === 0) {
 					return "No subagent profiles are defined, so do not pass a profile parameter; each subagent uses its own model/settings.";
 				}
-				return `Available subagent profile(s): ${registeredProfileSummary}. Pick one by name (${registeredProfileNames.join("/")}); omit profile to let the agent use its own model/settings.`;
+				return `Available subagent profile(s): ${registeredProfileSummary}. Check and evaluate the task (priority), pick one by name (${registeredProfileNames.join("/")}); omit profile to let the agent use its own model/settings.`;
 			})();
 			return [
 				pick,
