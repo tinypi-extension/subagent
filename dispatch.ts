@@ -7,7 +7,7 @@
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { AgentConfig, AgentDiscoveryResult } from "./agents.ts";
 import {
-	loadProfiles,
+	loadProfilesIfEnabled,
 	resolveProfile,
 	validateProfiles,
 	type SubagentProfile,
@@ -48,7 +48,7 @@ export async function executeDispatch(
 	onUpdate: OnUpdateCallback | undefined,
 	agentScope: "user" | "project" | "both",
 	discovery: AgentDiscoveryResult,
-	profiles: Record<string, SubagentProfile> = loadProfiles(ctx.cwd, ctx.isProjectTrusted()),
+	profiles: Record<string, SubagentProfile> = loadProfilesIfEnabled(ctx.cwd, ctx.isProjectTrusted()),
 ): Promise<AgentToolResult<SubagentDetails>> {
 	const agents = discovery.agents;
 	const confirmProjectAgents = params.confirmProjectAgents ?? true;

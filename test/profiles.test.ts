@@ -6,6 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   loadProfilesFrom,
+  loadProfilesIfEnabled,
   resolveProfile,
   validateProfiles,
   formatProfileSummary,
@@ -29,6 +30,12 @@ test("isProfilesEnabled requires an explicit true tag", () => {
   assert.equal(isProfilesEnabled(tmpFile(JSON.stringify({ subagent: {} }))), false);
   assert.equal(isProfilesEnabled(tmpFile(JSON.stringify({ subagent: { enableProfiles: "true" } }))), false);
   assert.equal(isProfilesEnabled(tmpFile("not json")), false);
+});
+
+test("disabled profiles produce no usable profiles", () => {
+  const f = tmpFile(JSON.stringify({ subagent: { profiles: { fast: { thinking: "off" } } } }));
+  assert.deepEqual(loadProfilesIfEnabled("/tmp", true, false), {});
+  assert.deepEqual(loadProfilesIfEnabled(path.dirname(f), true, false), {});
 });
 
 test("loadProfilesFrom parses valid profiles and drops malformed ones", () => {

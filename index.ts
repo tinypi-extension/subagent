@@ -37,7 +37,7 @@ import { renderCall, renderResult, type Theme } from "./render.ts";
 // the description notes so the model doesn't assume this list is exhaustive.
 const globalSettingsPath = path.join(getAgentDir(), "settings.json");
 const profilesEnabled = isProfilesEnabled(globalSettingsPath);
-const registeredGlobalProfiles = loadProfilesFrom(globalSettingsPath);
+const registeredGlobalProfiles = profilesEnabled ? loadProfilesFrom(globalSettingsPath) : {};
 const registeredProfileNames = Object.keys(registeredGlobalProfiles);
 const registeredProfileSummary = formatProfileSummary(registeredGlobalProfiles);
 const profileHint =
@@ -78,8 +78,6 @@ const SubagentParams = Type.Object({
 });
 
 export default function (pi: ExtensionAPI) {
-	if (!profilesEnabled) return;
-
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",

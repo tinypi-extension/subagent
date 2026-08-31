@@ -86,6 +86,14 @@ export function loadProfiles(cwd: string, projectTrusted: boolean): Record<strin
   return { ...global, ...project };
 }
 
+export function loadProfilesIfEnabled(
+  cwd: string,
+  projectTrusted: boolean,
+  enabled: boolean = isProfilesEnabled(path.join(getAgentDir(), "settings.json")),
+): Record<string, SubagentProfile> {
+  return enabled ? loadProfiles(cwd, projectTrusted) : {};
+}
+
 export function validateProfiles(
   requested: (string | undefined)[],
   available: Record<string, SubagentProfile>,
