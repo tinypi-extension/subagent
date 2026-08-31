@@ -21,7 +21,7 @@ Spec: `docs/superpowers/specs/2026-08-31-subagent-agent-names-in-description-des
 - **Extension load must never throw.** A missing/unreadable agents dir or bad frontmatter may only shorten the list, never abort registration.
 - **No config flag** — not gated behind `enableProfiles` or anything else.
 - **Indentation follows the file:** tabs in `agents.ts`, `index.ts`, `types.ts`; 2 spaces in `test/*.test.ts`.
-- **Do not commit the pre-existing WIP.** The working tree already has unrelated uncommitted changes to `dispatch.ts`, `profiles.ts`, `test/profiles.test.ts`, and two `enableProfiles` hunks in `index.ts`. Stage only the paths each task names, and use `git add -p index.ts` where flagged.
+- **Commit only what a task changes.** Your `enableProfiles` WIP is now committed (`6a706b8`), so the tree starts clean. Stage the explicit paths each task names; if `git status --short` ever shows a file you did not touch, leave it unstaged and say so.
 
 ---
 
@@ -187,10 +187,10 @@ git commit -m "feat: add capped project-first agent name formatter"
 - Consumes: `formatAgentNames(agents, maxItems) -> { text, remaining }` and `MAX_LISTED_AGENTS` from Task 1; `discoverAgents(cwd, scope) -> AgentDiscoveryResult` (existing).
 - Produces: the registered `subagent` tool's `description`, `parameters.properties.agent.description`, and a third `promptGuidelines` entry. Nothing else in the codebase reads these.
 
-- [ ] **Step 1: Protect the unrelated WIP in `index.ts`**
+- [ ] **Step 1: Confirm a clean starting point**
 
-Run: `git diff index.ts`
-Expected: exactly two hunks — `registeredGlobalProfiles` gaining the `profilesEnabled ? … : {}` guard, and removal of `if (!profilesEnabled) return;` from the exported function. These are not ours. Every commit in this task stages `index.ts` with `git add -p index.ts`, selecting only the hunks we add. If the tree shows more, stop and ask the user before proceeding.
+Run: `git status --short && git log --oneline -1`
+Expected: no modified files (your `enableProfiles` WIP landed in `6a706b8`, so `index.ts` is clean), and `index.ts:40` reads `const registeredGlobalProfiles = profilesEnabled ? loadProfilesFrom(globalSettingsPath) : {};`. If unrelated files *are* modified, stop and ask before touching them.
 
 - [ ] **Step 2: Extend the imports**
 
@@ -338,23 +338,21 @@ Expected: 12 names then ` +3 more`; `empty: {"text":"","remaining":0}`.
 EMPTY=$(mktemp -d) && cd "$EMPTY" && HOME="$EMPTY" /Users/tinyphat/.pi/agent/extensions/subagent/node_modules/.bin/tsx /tmp/agent-advert.ts; cd /Users/tinyphat && rm -rf "$EMPTY"
 ```
 
-Expected: description contains `Available agents: none found at startup; project-local agents in .pi/agents may still exist.` with no `(user)`/`(project)` names anywhere; the `agent` param contains `No agents were found at startup; passing any name returns the current list.` and no `Valid:` clause. Also expect `Profiles: no profiles defined` — that string comes from the user's uncommitted `enableProfiles` WIP, not from this task; do not treat it as a regression.
+Expected: description contains `Available agents: none found at startup; project-local agents in .pi/agents may still exist.` with no `(user)`/`(project)` names anywhere; the `agent` param contains `No agents were found at startup; passing any name returns the current list.` and no `Valid:` clause. Also expect `Profiles: no profiles defined` — with `$HOME` redirected, `settings.json` is unreadable, so profiles are off. That is correct behavior from the `enableProfiles` work in `6a706b8`, not a regression from this task.
 
 - [ ] **Step 13: Run the full suite**
 
 Run: `npm test`
-Expected: PASS for `test/agents.test.ts`, `test/dispatch.test.ts`, `test/profiles.test.ts`; 0 failures. (The last two exercise the user's in-flight WIP; if either fails in a way unrelated to agent names, report it rather than fixing it.)
+Expected: PASS for `test/agents.test.ts`, `test/dispatch.test.ts`, `test/profiles.test.ts`; 0 failures. These now exercise your committed `enableProfiles` code; if either of the last two fails in a way unrelated to agent names, report it rather than fixing it.
 
-- [ ] **Step 14: Commit, hunk by hunk**
+- [ ] **Step 14: Commit**
 
 ```bash
-git add -p index.ts    # select ONLY the agent-name hunks: import, composition block,
-                        # description element, param hint, guideline bullet. Skip the two
-                        # enableProfiles hunks.
+git add index.ts
 git commit -m "feat: advertise valid subagent agent names in the tool description"
 ```
 
-Verify before committing: `git diff --cached index.ts` must contain no `enableProfiles`, `profilesEnabled ?`, or `if (!profilesEnabled) return;` lines. Confirm after: `git show --stat HEAD` should list only `index.ts`, and `git status --short` should still show `M index.ts` (the WIP survives, uncommitted).
+Verify after: `git show --stat HEAD` lists only `index.ts`, and `git status --short` is clean.
 
 ---
 
@@ -417,5 +415,5 @@ git commit -m "docs: document agent name advertising in the subagent tool descri
 - `npm run typecheck` exits 0 and `npm test` passes.
 - A real `registerTool` capture shows the same capped, project-first name list in both the description and the `agent` param, `TaskItem.agent`/`ChainItem.agent` unchanged, and exactly three `promptGuidelines`.
 - All three branches are observed executing, not inferred: normal list (Task 2 Step 9), project-first (Step 10), and empty (Step 12).
-- The user's `enableProfiles` WIP is still uncommitted in `dispatch.ts`, `profiles.ts`, `test/profiles.test.ts`, and `index.ts`.
+- Your `enableProfiles` work stays intact in `6a706b8`, and this plan adds exactly three commits on top.
 - Spec constraints 1-7 each map to shipped, observed behavior.
