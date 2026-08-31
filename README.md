@@ -11,7 +11,7 @@ Rather than cramming parallel work, research, and implementation into the main a
   - **single** — one `{ agent, task }`.
   - **parallel** — an array of `tasks`, run concurrently up to **4** at once (max **8** tasks total, `types.ts`).
   - **chain** — an array of steps run strictly in sequence; the `{previous}` placeholder in a later task is replaced with the previous step's output; the chain **stops on the first failed step**.
-- **Agent discovery.** Agents are loaded from your user agent directory and the project's agent directory (see [Configuration](#configuration)).
+- **Agent discovery.** Agents are loaded from your user agent directory and the project's agent directory (see [Configuration](#configuration)). The names available at startup are listed in the `subagent` tool description — project agents first — so the model has valid names to copy instead of inventing them (see [Limits](#limits)).
 - **Execution profiles.** Each task can name a profile that controls the subagent's model and thinking level (see [Configuration](#configuration)).
 - **Structured output + TUI rendering.** Results stream back as JSON and are rendered in the terminal, with usage/stats (tokens, cost, turns) and collapsed/expanded item views.
 
@@ -111,6 +111,10 @@ another agent can use without re-reading everything.
 
 The `name` and `description` are required; `tools` restricts which tools the subagent gets; `model` (optional) sets the subagent's model.
 
+Only the `name` is advertised to the model, along with whether it came from the user or project directory. The `description` steers a subagent's own behavior but is not used to pick between agents — add agent files, then `/reload` (or restart pi) for their names to appear in the tool description.
+
+An agent file whose frontmatter cannot be parsed is skipped silently, along with any file missing `name` or a string `description`; it disappears from discovery rather than being reported. If an agent seems to be missing, check its frontmatter — a colon-introduced value such as `description: [ …` starts a YAML flow sequence and must be quoted.
+
 ### Ready-made workflow prompts
 
 Full copy-paste workflows live in `prompts/`:
@@ -161,6 +165,7 @@ Passing an **unknown** profile name is a hard error that lists the valid names; 
 - Chain: runs sequentially; stops on the **first failed step**.
 - Per-task output in parallel results is capped (~**50KB**); full output is preserved in the tool details (`format.ts`).
 - TUI rendering collapses item lists after **10** items (`types.ts`).
+- Agent names advertised in the tool description: max **12** listed (`MAX_LISTED_AGENTS`, `types.ts`), project agents first, the rest collapsed to `+K more`. Snapshot taken when the extension loads, from the directory pi was launched in — new or removed agents need a `/reload`. Calling an unknown name is not fatal: it returns the full current list.
 
 ## Development / testing
 
@@ -169,7 +174,7 @@ npm run typecheck   # tsc --noEmit
 npm test            # node --test --import tsx test/*.test.ts
 ```
 
-Tests: `test/dispatch.test.ts` (orchestration) and `test/profiles.test.ts` (profile resolution/validation).
+Tests: `test/agents.test.ts` (agent name formatting), `test/dispatch.test.ts` (orchestration) and `test/profiles.test.ts` (profile resolution/validation).
 
 ## License
 
