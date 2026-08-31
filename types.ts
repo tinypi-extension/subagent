@@ -8,6 +8,10 @@ import type { AgentScope } from "./agents.ts";
 
 export const MAX_PARALLEL_TASKS = 8;
 export const MAX_CONCURRENCY = 4;
+// How many agent names the tool description + `agent` param hint list before
+// collapsing to "+K more". Comfortably above the agents shipped in agents/, so a
+// normal install lists every name, while a large library cannot grow the prompt.
+export const MAX_LISTED_AGENTS = 12;
 export const COLLAPSED_ITEM_COUNT = 10;
 export const PER_TASK_OUTPUT_CAP = 50 * 1024;
 

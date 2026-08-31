@@ -146,12 +146,37 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 	return { agents: Array.from(agentMap.values()), projectAgentsDir };
 }
 
-export function formatAgentList(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
-	if (agents.length === 0) return { text: "none", remaining: 0 };
-	const listed = agents.slice(0, maxItems);
-	const remaining = agents.length - listed.length;
+/**
+ * Rank used to order names in prompt text: project agents first, then user agents.
+ * The advertised list is capped by `MAX_LISTED_AGENTS` and truncated from the tail, so
+ * the repo-specific names are the ones guaranteed a slot.
+ */
+const SOURCE_RANK: Record<AgentConfig["source"], number> = { project: 0, user: 1 };
+
+/**
+ * Render agent names for the tool description and the top-level `agent` param hint.
+ *
+ * Deliberately names only. An agent's `description` is long prose, and repeating one per
+ * name on every prompt turn buys routing quality this feature does not claim — its goal
+ * is giving the model legal values to copy. See
+ * docs/superpowers/specs/2026-08-31-subagent-agent-names-in-description-design.md.
+ *
+ * `text` holds up to `maxItems` entries as `name (source)`, project-first and
+ * alphabetical within each source; `remaining` is how many were dropped, so the caller
+ * can append `+K more`. A dropped name still self-corrects: `run.ts` answers an unknown
+ * agent with the full current list.
+ *
+ * Pure and total: returns `""` (not `"none"`) when there is nothing to list, so the
+ * caller picks the empty-case wording, and never mutates `agents`.
+ */
+export function formatAgentNames(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
+	const sorted = [...agents].sort((a, b) => {
+		const bySource = SOURCE_RANK[a.source] - SOURCE_RANK[b.source];
+		return bySource !== 0 ? bySource : a.name.localeCompare(b.name);
+	});
+	const listed = sorted.slice(0, Math.max(0, maxItems));
 	return {
-		text: listed.map((a) => `${a.name} (${a.source}): ${a.description}`).join("; "),
-		remaining,
+		text: listed.map((a) => `${a.name} (${a.source})`).join(", "),
+		remaining: sorted.length - listed.length,
 	};
 }
