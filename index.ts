@@ -25,10 +25,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { type AgentScope, discoverAgents } from "./agents.ts";
+import { type AgentScope, discoverAgents, formatAgentNames } from "./agents.ts";
 import { executeDispatch, type DispatchParams } from "./dispatch.ts";
 import { formatProfileSummary, isProfilesEnabled, loadProfilesFrom } from "./profiles.ts";
 import { renderCall, renderResult, type Theme } from "./render.ts";
+import { MAX_LISTED_AGENTS } from "./types.ts";
 
 // Bake the actually-defined subagent profiles into the tool's description and
 // parameter hints at load time, so the model knows what profiles exist without
@@ -44,6 +45,28 @@ const profileHint =
 	registeredProfileNames.length === 0
 		? "No subagent profiles are defined, so omit the profile parameter and let the agent use its own model/settings."
 		: `Currently available profile(s): ${registeredProfileSummary}. Pick one by name; also check project-level .pi/settings.json for any additional/overriding profiles.`;
+
+// Bake the agent names that exist at load time into the tool description and the
+// top-level `agent` hint, so the model has legal names to copy instead of inventing
+// them. Scope "both" and the launch directory: extensions load once per process, so
+// this is the best available guess at the project set.
+//
+// Two stale-by-construction cases, both self-healing in one round-trip: agents created
+// after startup are missing, a removed agent may still be advertised, and launching from
+// a parent directory finds no project agents at all. The authoritative set is always the
+// per-call discoverAgents(ctx.cwd, agentScope) in execute() below, and run.ts answers an
+// unknown name with the full current list.
+const agentAdvert = formatAgentNames(discoverAgents(process.cwd(), "both").agents, MAX_LISTED_AGENTS);
+const agentNamesText =
+	agentAdvert.remaining > 0 ? `${agentAdvert.text} +${agentAdvert.remaining} more` : agentAdvert.text;
+const hasAgentNames = agentAdvert.text.length > 0;
+// One string, interpolated in both places below, so the two can never disagree.
+const availableAgentsSentence = hasAgentNames
+	? `Available agents: ${agentNamesText}. Captured at startup from the launch directory, so project-local agents added since then are missing. Passing an unknown name returns the full current list.`
+	: `Available agents: none found at startup; project-local agents in ${CONFIG_DIR_NAME}/agents may still exist. Passing an unknown name returns the full current list.`;
+const agentParamHint = hasAgentNames
+	? `Name of the agent to invoke (for single mode; the same names apply to items in tasks/chain). Valid: ${agentNamesText}. Passing an unknown name returns the current list.`
+	: `Name of the agent to invoke (for single mode; the same names apply to items in tasks/chain). No agents were found at startup; passing any name returns the current list.`;
 
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
@@ -65,7 +88,7 @@ const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
 });
 
 const SubagentParams = Type.Object({
-	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
+	agent: Type.Optional(Type.String({ description: agentParamHint })),
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
 	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
 	profile: Type.Optional(Type.String({ description: `Execution profile for this single task. ${profileHint}` })),
@@ -86,6 +109,7 @@ export default function (pi: ExtensionAPI) {
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
 			`Default agent scope is "both" (recommended): user agents from ${path.join(getAgentDir(), "agents")} plus project-local agents from ${CONFIG_DIR_NAME}/agents (project agents win name conflicts).`,
 			`Other options is "user" and "project"`,
+			availableAgentsSentence,
 			`Profiles: ${registeredProfileSummary}. ${registeredProfileNames.length > 0
 				? "Pass one of these names per task to control the subagent's model and thinking; omit to use the agent's own model/settings."
 				: "Omit the profile parameter and let the agent use its own model/settings."
@@ -101,6 +125,7 @@ export default function (pi: ExtensionAPI) {
 			return [
 				pick,
 				"Project-level .pi/settings.json may define additional or overriding profiles beyond this global list, so the full set is resolved per-session.",
+				"When calling subagent, choose an agent name from its Available agents list rather than inventing one; an unknown name returns the current list.",
 			];
 		})(),
 		parameters: SubagentParams,
