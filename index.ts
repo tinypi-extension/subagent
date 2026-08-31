@@ -51,16 +51,19 @@ const profileHint =
 // them. Scope "both" and the launch directory: extensions load once per process, so
 // this is the best available guess at the project set.
 //
-// Two stale-by-construction cases, both self-healing in one round-trip: agents created
-// after startup are missing, a removed agent may still be advertised, and launching from
-// a parent directory finds no project agents at all. The authoritative set is always the
-// per-call discoverAgents(ctx.cwd, agentScope) in execute() below, and run.ts answers an
-// unknown name with the full current list.
+// Three ways this load-time list can be wrong, all self-healing in one round-trip: a
+// name is missing (agents created after startup), a name is stale (a removed agent is
+// still advertised), or the list is empty (launching from a parent directory finds no
+// project agents at all). The authoritative set is always the per-call
+// discoverAgents(ctx.cwd, agentScope) in execute() below, and run.ts answers an unknown
+// name with the full current list.
 const agentAdvert = formatAgentNames(discoverAgents(process.cwd(), "both").agents, MAX_LISTED_AGENTS);
+// The one name list interpolated into both prompt surfaces below: the tool description
+// and the `agent` param hint are separate sentences, but they can never advertise
+// different sets of names.
 const agentNamesText =
 	agentAdvert.remaining > 0 ? `${agentAdvert.text} +${agentAdvert.remaining} more` : agentAdvert.text;
 const hasAgentNames = agentAdvert.text.length > 0;
-// One string, interpolated in both places below, so the two can never disagree.
 const availableAgentsSentence = hasAgentNames
 	? `Available agents: ${agentNamesText}. Captured at startup from the launch directory, so project-local agents added since then are missing. Passing an unknown name returns the full current list.`
 	: `Available agents: none found at startup; project-local agents in ${CONFIG_DIR_NAME}/agents may still exist. Passing an unknown name returns the full current list.`;

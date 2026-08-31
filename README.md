@@ -111,7 +111,7 @@ another agent can use without re-reading everything.
 
 The `name` and `description` are required; `tools` restricts which tools the subagent gets; `model` (optional) sets the subagent's model.
 
-Only the `name` is advertised to the model, along with whether it came from the user or project directory. The `description` steers a subagent's own behavior but is not used to pick between agents — add agent files, then `/reload` (or restart pi) for their names to appear in the tool description.
+Only the `name` is advertised to the model, along with whether it came from the user or project directory. The `description` is required for an agent file to load, but it is not sent anywhere: it neither reaches the subagent — whose system prompt is the markdown body below the closing `---` — nor is it used to pick between agents. Add agent files, then `/reload` (or restart pi) for their names to appear in the tool description.
 
 An agent file whose frontmatter cannot be parsed is skipped silently, along with any file missing `name` or a string `description`; it disappears from discovery rather than being reported. If an agent seems to be missing, check its frontmatter — a colon-introduced value such as `description: [ …` starts a YAML flow sequence and must be quoted.
 
@@ -174,7 +174,7 @@ npm run typecheck   # tsc --noEmit
 npm test            # node --test --import tsx test/*.test.ts
 ```
 
-Tests: `test/agents.test.ts` (agent name formatting), `test/dispatch.test.ts` (orchestration) and `test/profiles.test.ts` (profile resolution/validation).
+Tests: `test/agents.test.ts` (agent name formatting and discovery), `test/dispatch.test.ts` (orchestration) and `test/profiles.test.ts` (profile resolution/validation).
 
 ## License
 
