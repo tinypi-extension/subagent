@@ -1,7 +1,10 @@
 // test/agents.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatAgentNames, type AgentConfig } from "../agents.ts";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { discoverAgents, formatAgentNames, type AgentConfig } from "../agents.ts";
 
 function agent(name: string, source: "user" | "project"): AgentConfig {
   return { name, source, description: `${name} does things`, systemPrompt: "", filePath: `/agents/${name}.md` };
@@ -52,4 +55,19 @@ test("formatAgentNames with maxItems 0 lists nothing but still counts the rest",
 
 test("formatAgentNames returns empty text for no agents", () => {
   assert.deepEqual(formatAgentNames([], 12), { text: "", remaining: 0 });
+});
+
+test("a malformed frontmatter file is skipped without taking down its siblings", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-agents-"));
+  try {
+    const agentsDir = path.join(root, ".pi", "agents");
+    fs.mkdirSync(agentsDir, { recursive: true });
+    fs.writeFileSync(path.join(agentsDir, "foo.md"), "---\nname: foo\ndescription: project agent\n---\nbody\n");
+    fs.writeFileSync(path.join(agentsDir, "bad.md"), "---\nname: bad\ndescription: [\n---\nbody\n");
+    const result = discoverAgents(root, "project");
+    assert.deepEqual(result.agents.map((a) => a.name), ["foo"]);
+    assert.equal(formatAgentNames(result.agents, 12).text, "foo (project)");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

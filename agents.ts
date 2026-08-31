@@ -85,7 +85,19 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 			continue;
 		}
 
-		const { frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content);
+		let frontmatter: AgentFrontmatter;
+		let body: string;
+		try {
+			({ frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content));
+		} catch {
+			// Frontmatter is real YAML and throws on malformed input. Skipping the file is
+			// the only safe response: this loop runs at extension-load time as well as per
+			// call (index.ts discovers agents on module load to advertise their names), and
+			// loader.js turns any throw during load into a null extension — one bad file
+			// would silently remove the whole subagent tool. Same policy as parseToolList
+			// above: a single bad file shortens the list, it never takes down the directory.
+			continue;
+		}
 
 		if (typeof frontmatter.name !== "string" || typeof frontmatter.description !== "string") {
 			continue;
