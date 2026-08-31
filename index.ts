@@ -113,7 +113,7 @@ export default function (pi: ExtensionAPI) {
 			`Profiles: ${registeredProfileSummary}. ${registeredProfileNames.length > 0
 				? "Pass one of these names per task to control the subagent's model and thinking; omit to use the agent's own model/settings."
 				: "Omit the profile parameter and let the agent use its own model/settings."
-			}]`,
+			}`,
 		].join(" "),
 		promptGuidelines: (() => {
 			const pick = (() => {
