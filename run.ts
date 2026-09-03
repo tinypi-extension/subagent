@@ -43,10 +43,37 @@ async function writePromptToTempFile(agentName: string, prompt: string): Promise
 	return { dir: tmpDir, filePath };
 }
 
-function getPiInvocation(args: string[]): { command: string; args: string[] } {
+/**
+ * Returns true when `filePath` is the pi CLI entry script itself.
+ *
+ * We must not blindly spawn `process.argv[1]` with pi args: when this
+ * extension is embedded in another runtime (e.g. pi-web runs the agent
+ * in-process inside a Next.js server), argv[1] is that host's binary — not pi.
+ * Spawning e.g. `node next --mode json -p --no-session <task>` makes next's
+ * commander treat `-p` as `--port <port>` and fail with:
+ *   error: option '-p, --port <port>' argument '--no-session' is invalid.
+ *   '--no-session' is not a non-negative number.
+ */
+function isPiCliEntry(filePath: string | undefined): boolean {
+	if (!filePath) return false;
+	const lower = path.basename(filePath).toLowerCase();
+	return (
+		lower === "pi" ||
+		lower === "pi.exe" ||
+		lower === "pi.cmd" ||
+		lower === "pi.ps1" ||
+		lower === "pi.js" ||
+		lower === "pi.mjs" ||
+		lower === "pi.cjs"
+	);
+}
+
+export function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	const currentScript = process.argv[1];
 	const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
-	if (currentScript && !isBunVirtualScript && fs.existsSync(currentScript)) {
+	// Only re-invoke argv[1] when it is actually the pi CLI entry (npm/bun
+	// installs name it `pi`). Otherwise fall back to the real `pi` on PATH.
+	if (currentScript && !isBunVirtualScript && fs.existsSync(currentScript) && isPiCliEntry(currentScript)) {
 		return { command: process.execPath, args: [currentScript, ...args] };
 	}
 
