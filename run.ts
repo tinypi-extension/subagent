@@ -98,7 +98,6 @@ export async function runSingleAgent(
 	agentName: string,
 	task: string,
 	cwd: string | undefined,
-	step: number | undefined,
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
@@ -115,7 +114,6 @@ export async function runSingleAgent(
 			messages: [],
 			stderr: `Unknown agent: "${agentName}". Available agents: ${available}.`,
 			usage: emptyUsage(),
-			step,
 		};
 	}
 
@@ -137,7 +135,6 @@ export async function runSingleAgent(
 		usage: emptyUsage(),
 		model: dispatchDefaults.model,
 		profile: profileName,
-		step,
 	};
 
 	const emitUpdate = () => {

@@ -33,26 +33,6 @@ const aggregateProfiles = (results: SingleResult[]): string => {
 
 export function renderCall(args: DispatchParams, theme: Theme, _context?: unknown) {
 	const scope = getScope(args);
-	if (args.chain && args.chain.length > 0) {
-		let text =
-			theme.fg("toolTitle", theme.bold("subagent ")) +
-			theme.fg("accent", `chain (${args.chain.length} steps)`) +
-			theme.fg("muted", ` [${scope}]`);
-		for (let i = 0; i < Math.min(args.chain.length, 3); i++) {
-			const step = args.chain[i];
-			// Clean up {previous} placeholder for display
-			const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
-			const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
-			text +=
-				"\n  " +
-				theme.fg("muted", `${i + 1}.`) +
-				" " +
-				theme.fg("accent", step.agent) +
-				theme.fg("dim", ` ${preview}`);
-		}
-		if (args.chain.length > 3) text += `\n  ${theme.fg("muted", `... +${args.chain.length - 3} more`)}`;
-		return new Text(text, 0, 0);
-	}
 	if (args.tasks && args.tasks.length > 0) {
 		let text =
 			theme.fg("toolTitle", theme.bold("subagent ")) +
@@ -160,88 +140,6 @@ export function renderResult(
 		}
 		const usageStr = formatUsageStats(r.usage, r.model, r.profile);
 		if (usageStr) text += `\n${theme.fg("dim", usageStr)}`;
-		return new Text(text, 0, 0);
-	}
-
-	if (details.mode === "chain") {
-		const successCount = details.results.filter((r) => r.exitCode === 0).length;
-		const icon = successCount === details.results.length ? theme.fg("success", "✓") : theme.fg("error", "✗");
-
-		if (expanded) {
-			const container = new Container();
-			container.addChild(
-				new Text(
-					icon +
-					" " +
-					theme.fg("toolTitle", theme.bold("chain ")) +
-					theme.fg("accent", `${successCount}/${details.results.length} steps`),
-					0,
-					0,
-				),
-			);
-
-			for (const r of details.results) {
-				const rIcon = r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
-				const displayItems = getDisplayItems(r.messages);
-				const finalOutput = getFinalOutput(r.messages);
-
-				container.addChild(new Spacer(1));
-				container.addChild(
-					new Text(
-						`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}`,
-						0,
-						0,
-					),
-				);
-				container.addChild(new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0));
-
-				// Show tool calls
-				for (const item of displayItems) {
-					if (item.type === "toolCall") {
-						container.addChild(
-							new Text(
-								theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
-								0,
-								0,
-							),
-						);
-					}
-				}
-
-				// Show final output as markdown
-				if (finalOutput) {
-					container.addChild(new Spacer(1));
-					container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
-				}
-
-				const stepUsage = formatUsageStats(r.usage, r.model, r.profile);
-				if (stepUsage) container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
-			}
-
-			const usageStr = formatUsageStats(aggregateUsage(details.results), undefined, undefined);
-			if (usageStr) {
-				container.addChild(new Spacer(1));
-				container.addChild(new Text(theme.fg("dim", `Total: ${usageStr}`), 0, 0));
-			}
-			return container;
-		}
-
-		// Collapsed view
-		let text =
-			icon +
-			" " +
-			theme.fg("toolTitle", theme.bold("chain ")) +
-			theme.fg("accent", `${successCount}/${details.results.length} steps`);
-		for (const r of details.results) {
-			const rIcon = r.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
-			const displayItems = getDisplayItems(r.messages);
-			text += `\n\n${theme.fg("muted", `─── Step ${r.step}: `)}${theme.fg("accent", r.agent)} ${rIcon}`;
-			if (displayItems.length === 0) text += `\n${theme.fg("muted", "(no output)")}`;
-			else text += `\n${renderDisplayItems(displayItems, 5)}`;
-		}
-		const usageStr = formatUsageStats(aggregateUsage(details.results), undefined, undefined);
-		if (usageStr) text += `\n\n${theme.fg("dim", `Total: ${usageStr}`)}`;
-		text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
 		return new Text(text, 0, 0);
 	}
 

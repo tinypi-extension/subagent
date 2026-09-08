@@ -7,10 +7,9 @@ Rather than cramming parallel work, research, and implementation into the main a
 ## What it does
 
 - **Isolated subprocesses.** Each delegated task is a separate `pi --mode json --no-session` process (`run.ts`), so subagents never share or pollute the main agent's context window.
-- **Three orchestration modes:**
+- **Two orchestration modes:**
   - **single** — one `{ agent, task }`.
   - **parallel** — an array of `tasks`, run concurrently up to **4** at once (max **8** tasks total, `types.ts`).
-  - **chain** — an array of steps run strictly in sequence; the `{previous}` placeholder in a later task is replaced with the previous step's output; the chain **stops on the first failed step**.
 - **Agent discovery.** Agents are loaded from your user agent directory and the project's agent directory (see [Configuration](#configuration)). The names available at startup are listed in the `subagent` tool description — project agents first — so the model has valid names to copy instead of inventing them (see [Limits](#limits)).
 - **Execution profiles.** Each task can name a profile that controls the subagent's model and thinking level (see [Configuration](#configuration)).
 - **Structured output + TUI rendering.** Results stream back as JSON and are rendered in the terminal, with usage/stats (tokens, cost, turns) and collapsed/expanded item views.
@@ -76,18 +75,6 @@ The tool parameter schema lives in `index.ts` (`SubagentParams`). Pass exactly *
   "tasks": [
     { "agent": "scout", "task": "Find all code related to user auth." },
     { "agent": "scout", "task": "Map the CLI entry points." }
-  ]
-}
-```
-
-**Chain** (sequential; `{previous}` is replaced with the prior step's output; stops on failure):
-
-```json
-{
-  "chain": [
-    { "agent": "scout", "task": "Gather context about the login flow." },
-    { "agent": "planner", "task": "Plan a refactor of the login flow. Context: {previous}" },
-    { "agent": "worker", "task": "Implement the plan. {previous}" }
   ]
 }
 ```
@@ -159,10 +146,25 @@ A task selects one via its `profile` param. Resolution/fallback per task (`profi
 
 Passing an **unknown** profile name is a hard error that lists the valid names; omitting `profile` never errors and just falls back.
 
+### Herdr mode (opt-in)
+
+When running **inside a herdr pane** (`HERDR_ENV=1` + `HERDR_PANE_ID` + `HERDR_SOCKET_PATH`), the extension can switch to herdr-native tools: `subagent` becomes fire-and-forget (subagents launch as herdr plugin panes, spawn returns a ~1s ack, results arrive as `subagent_result`/`subagent_ping` steer messages), plus `subagent_resume`, `subagent_interrupt`, and `subagents_list`. Requires the `pi-herdr-subagents` plugin to be linked (`herdr plugin link <extension>/herdr-plugin --enabled`) and herdr ≥ 0.8.2.
+
+This mode is **off by default**. Enable it by setting `subagent.herdr` to the boolean `true` in the global `~/.pi/agent/settings.json`:
+
+```json
+{
+  "subagent": {
+    "herdr": true
+  }
+}
+```
+
+Both conditions must hold: the herdr environment **and** `subagent.herdr === true`. Otherwise the extension falls back to the standard blocking `subagent` tool (single + parallel, one tool result). Project-level settings do not participate in this flag — only the global settings file is read.
+
 ## Limits
 
 - Parallel: max **8** tasks, **4** concurrent.
-- Chain: runs sequentially; stops on the **first failed step**.
 - Per-task output in parallel results is capped (~**50KB**); full output is preserved in the tool details (`format.ts`).
 - TUI rendering collapses item lists after **10** items (`types.ts`).
 - Agent names advertised in the tool description: max **12** listed (`MAX_LISTED_AGENTS`, `types.ts`), project agents first, the rest collapsed to `+K more`. Snapshot taken when the extension loads, from the directory pi was launched in — new or removed agents need a `/reload`. Calling an unknown name is not fatal: it returns the full current list.

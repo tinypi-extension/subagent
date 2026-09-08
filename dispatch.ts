@@ -1,5 +1,5 @@
 /**
- * Dispatch orchestrator: validates the requested mode (single/parallel/chain),
+ * Dispatch orchestrator: validates the requested mode (single/parallel),
  * handles project-agent trust confirmation, and runs the corresponding branch.
  * Kept separate from the tool registration so `index.ts` stays thin.
  */
@@ -35,7 +35,6 @@ export interface DispatchParams {
 	task?: string;
 	profile?: string;
 	tasks?: { agent: string; task: string; profile?: string; cwd?: string }[];
-	chain?: { agent: string; task: string; profile?: string; cwd?: string }[];
 	agentScope?: "user" | "project" | "both";
 	confirmProjectAgents?: boolean;
 	cwd?: string;
@@ -63,13 +62,12 @@ export async function executeDispatch(
 		return resolveProfile(profileName ? profiles[profileName] : undefined, agentConfig, parentDefaults);
 	};
 
-	const hasChain = (params.chain?.length ?? 0) > 0;
 	const hasTasks = (params.tasks?.length ?? 0) > 0;
 	const hasSingle = Boolean(params.agent && params.task);
-	const modeCount = Number(hasChain) + Number(hasTasks) + Number(hasSingle);
+	const modeCount = Number(hasTasks) + Number(hasSingle);
 
 	const makeDetails =
-		(mode: "single" | "parallel" | "chain") =>
+		(mode: "single" | "parallel") =>
 		(results: SingleResult[]): SubagentDetails => ({
 			mode,
 			agentScope,
@@ -78,7 +76,6 @@ export async function executeDispatch(
 		});
 
 	const requestedProfiles: (string | undefined)[] = [];
-	if (params.chain) for (const s of params.chain) requestedProfiles.push(s.profile);
 	if (params.tasks) for (const t of params.tasks) requestedProfiles.push(t.profile);
 	requestedProfiles.push(params.profile);
 	const invalid = validateProfiles(requestedProfiles, profiles);
@@ -109,7 +106,6 @@ export async function executeDispatch(
 
 	if ((agentScope === "project" || agentScope === "both") && confirmProjectAgents && ctx.hasUI && !ctx.isProjectTrusted()) {
 		const requestedAgentNames = new Set<string>();
-		if (params.chain) for (const step of params.chain) requestedAgentNames.add(step.agent);
 		if (params.tasks) for (const t of params.tasks) requestedAgentNames.add(t.agent);
 		if (params.agent) requestedAgentNames.add(params.agent);
 
@@ -120,61 +116,6 @@ export async function executeDispatch(
 		// Confirmation UI is intentionally disabled pending a trusted-repo flow.
 		// See index.ts: the check is kept so the gate can be re-enabled.
 		void projectAgentsRequested;
-	}
-
-	if (params.chain && params.chain.length > 0) {
-		const results: SingleResult[] = [];
-		let previousOutput = "";
-
-		for (let i = 0; i < params.chain.length; i++) {
-			const step = params.chain[i];
-			const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
-
-			// Create update callback that includes all previous results
-			const chainUpdate: OnUpdateCallback | undefined = onUpdate
-				? (partial) => {
-						// Combine completed results with current streaming result
-						const currentResult = partial.details?.results[0];
-						if (currentResult) {
-							const allResults = [...results, currentResult];
-							onUpdate({
-								content: partial.content,
-								details: makeDetails("chain")(allResults),
-							});
-						}
-					}
-				: undefined;
-
-			const result = await runSingleAgent(
-				ctx.cwd,
-				resolveFor(step.agent, step.profile),
-				step.profile,
-				agents,
-				step.agent,
-				taskWithContext,
-				step.cwd,
-				i + 1,
-				signal,
-				chainUpdate,
-				makeDetails("chain"),
-			);
-			results.push(result);
-
-			const isError = isFailedResult(result);
-			if (isError) {
-				const errorMsg = getResultOutput(result);
-				return {
-					content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
-					details: makeDetails("chain")(results),
-					isError: true,
-				} as AgentToolResult<SubagentDetails>;
-			}
-			previousOutput = getFinalOutput(result.messages);
-		}
-		return {
-			content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
-			details: makeDetails("chain")(results),
-		};
 	}
 
 	if (params.tasks && params.tasks.length > 0) {
@@ -225,7 +166,6 @@ export async function executeDispatch(
 				t.agent,
 				t.task,
 				t.cwd,
-				undefined,
 				signal,
 				// Per-task update callback
 				(partial) => {
@@ -269,7 +209,6 @@ export async function executeDispatch(
 			params.agent,
 			params.task,
 			params.cwd,
-			undefined,
 			signal,
 			onUpdate,
 			makeDetails("single"),
