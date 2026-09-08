@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { discoverAgents, formatAgentNames, type AgentConfig } from "../agents.ts";
+import { discoverAgents, formatAgentNames, type AgentConfig } from "../src/agents.ts";
 
 function agent(name: string, source: "user" | "project"): AgentConfig {
   return { name, source, description: `${name} does things`, systemPrompt: "", filePath: `/agents/${name}.md` };

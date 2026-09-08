@@ -1,10 +1,10 @@
 // test/dispatch.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { executeDispatch, type DispatchParams } from "../dispatch.ts";
-import type { DispatchContext, SubagentDetails } from "../types.ts";
-import type { AgentConfig, AgentDiscoveryResult } from "../agents.ts";
-import type { SubagentProfile } from "../profiles.ts";
+import { executeDispatch, type DispatchParams } from "../src/dispatch.ts";
+import type { DispatchContext, SubagentDetails } from "../src/types.ts";
+import type { AgentConfig, AgentDiscoveryResult } from "../src/agents.ts";
+import type { SubagentProfile } from "../src/profiles.ts";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 
 const ctx: DispatchContext = {

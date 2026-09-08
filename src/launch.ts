@@ -415,7 +415,7 @@ export function buildLaunchPlan(
   const piBin = env.PI_HERDR_PI_BIN ?? (ctx.resolvePiBin ?? defaultResolvePiBin)(env);
   const piArgv: string[] = [piBin, "--session", sessionFile];
 
-  const subagentDonePath = ctx.subagentDonePath ?? join(PACKAGE_ROOT, "subagent-done.ts");
+  const subagentDonePath = ctx.subagentDonePath ?? join(PACKAGE_ROOT, "src", "subagent-done.ts");
   piArgv.push("-e", subagentDonePath);
 
   // Phase 0: model and thinking are two independent flags in this runtime —
@@ -594,7 +594,7 @@ export function buildResumeLaunchPlan(
 
   // ── pi argv ──
   const piBin = env.PI_HERDR_PI_BIN ?? (ctx.resolvePiBin ?? defaultResolvePiBin)(env);
-  const subagentDonePath = ctx.subagentDonePath ?? join(PACKAGE_ROOT, "subagent-done.ts");
+  const subagentDonePath = ctx.subagentDonePath ?? join(PACKAGE_ROOT, "src", "subagent-done.ts");
   const piArgv: string[] = [piBin, "--session", params.sessionPath, "-e", subagentDonePath];
 
   let resumeMessageFile: string | null = null;

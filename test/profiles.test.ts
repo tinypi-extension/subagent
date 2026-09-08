@@ -12,8 +12,8 @@ import {
   formatProfileSummary,
   isProfilesEnabled,
   type SubagentProfile,
-} from "../profiles.ts";
-import type { DispatchDefaults } from "../types.ts";
+} from "../src/profiles.ts";
+import type { DispatchDefaults } from "../src/types.ts";
 
 function tmpFile(contents: string): string {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), "pi-profiles-"));

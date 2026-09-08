@@ -19,8 +19,8 @@ import { Box, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { writeFileSync } from "node:fs";
 
-import { writeContextUsageSidecar } from "./src/context-usage.ts";
-import { getActiveSubagentCount } from "./src/runtime-state.ts";
+import { writeContextUsageSidecar } from "./context-usage.ts";
+import { getActiveSubagentCount } from "./runtime-state.ts";
 
 export function shouldMarkUserTookOver(agentStarted: boolean): boolean {
   return agentStarted;

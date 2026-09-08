@@ -9,7 +9,7 @@ import {
   shouldAutoExitOnAgentEnd,
   shouldMarkUserTookOver,
   writeExitSidecar,
-} from "../subagent-done.ts";
+} from "../src/subagent-done.ts";
 import { writeContextUsageSidecar } from "../src/context-usage.ts";
 import {
   clearActiveSubagents,
@@ -155,7 +155,7 @@ describe("subagent-done: .exit sidecar shapes (cross-extension contract)", () =>
 
 describe("subagent-done: module", () => {
   it("loads standalone and exports a default extension factory", async () => {
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     assert.equal(typeof mod.default, "function");
   });
 });
@@ -194,7 +194,7 @@ describe("subagent-done: subagent_done tool writes sidecar and shuts down", () =
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
     await registeredTools.subagent_done.execute("call-1", {}, null, () => {}, fakeCtx);
     assert.equal(existsSync(`${sessionFile}.exit`), true, "tool writes the terminal sidecar");
@@ -242,7 +242,7 @@ describe("subagent-done: subagent_done tool writes sidecar and shuts down", () =
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
 
     assert.ok(registeredTools.subagent_done, "subagent_done tool should be registered");
@@ -294,7 +294,7 @@ describe("subagent-done: user close without subagent_done leaves no sidecar", ()
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
 
     handlers.session_start?.({}, fakeCtx);
@@ -345,7 +345,7 @@ describe("subagent-done: session_shutdown context usage fallback", () => {
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
     handlers.session_shutdown?.({}, fakeCtx);
     usage = { tokens: 90, contextWindow: 100, percent: 90 };
@@ -381,7 +381,7 @@ describe("subagent-done: session_shutdown context usage fallback", () => {
       registerShortcut: () => {},
       getAllTools: () => [],
     };
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
 
     assert.doesNotThrow(() => handlers.session_shutdown?.({}, { getContextUsage: () => undefined }));
@@ -422,7 +422,7 @@ describe("subagent-done: agent_end writes .exit sidecar on clean auto-exit", () 
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
 
     // Simulate session_start to initialize
@@ -466,7 +466,7 @@ describe("subagent-done: agent_end writes .exit sidecar on clean auto-exit", () 
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
 
     handlers.session_start?.({}, fakeCtx);
@@ -510,7 +510,7 @@ describe("subagent-done: agent_end writes .exit sidecar on clean auto-exit", () 
       ui: { setWidget: () => {} },
     };
 
-    const mod = await import("../subagent-done.ts");
+    const mod = await import("../src/subagent-done.ts");
     mod.default(fakePi as any);
     handlers.agent_end?.(
       { messages: [{ role: "assistant", stopReason: "stop" }] },

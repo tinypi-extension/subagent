@@ -43,11 +43,11 @@ import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { type AgentConfig, type AgentScope, discoverAgents, formatAgentNames } from "./agents.ts";
-import { executeDispatch, type DispatchParams } from "./dispatch.ts";
-import { formatProfileSummary, isProfilesEnabled, loadProfilesFrom, loadProfilesIfEnabled, resolveProfile, validateProfiles } from "./profiles.ts";
-import { renderCall, renderResult, type Theme } from "./render.ts";
-import { MAX_LISTED_AGENTS, MAX_PARALLEL_TASKS } from "./types.ts";
+import { type AgentConfig, type AgentScope, discoverAgents, formatAgentNames } from "./src/agents.ts";
+import { executeDispatch, type DispatchParams } from "./src/dispatch.ts";
+import { formatProfileSummary, isProfilesEnabled, loadProfilesFrom, loadProfilesIfEnabled, resolveProfile, validateProfiles } from "./src/profiles.ts";
+import { renderCall, renderResult, type Theme } from "./src/render.ts";
+import { MAX_LISTED_AGENTS, MAX_PARALLEL_TASKS } from "./src/types.ts";
 import {
 	consumeContextUsageSidecar,
 	contextUsagePath,

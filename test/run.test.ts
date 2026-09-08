@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getPiInvocation } from "../run.ts";
+import { getPiInvocation } from "../src/run.ts";
 
 const ORIGINAL_ARGV1 = process.argv[1];
 const ORIGINAL_EXEC = process.execPath;
