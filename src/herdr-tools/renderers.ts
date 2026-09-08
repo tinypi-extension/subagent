@@ -1,7 +1,5 @@
 // Steer-message renderers (registered in BOTH activation branches so
 // past-session entries replay correctly wherever the session is opened).
-//
-// Phase A2: extracted verbatim from index.ts.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { renderSubagentPing, renderSubagentResult } from "../messages.ts";

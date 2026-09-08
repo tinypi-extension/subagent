@@ -1,7 +1,7 @@
 // `subagents_list` (herdr branch, backed by the kept discovery).
 //
-// Phase A2: extracted verbatim from index.ts. Descriptions, promptGuidelines
-// and parameter descriptions must stay byte-identical.
+// Descriptions, promptGuidelines and parameter descriptions are part of the
+// advertised surface and must stay byte-identical.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";

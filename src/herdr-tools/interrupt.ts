@@ -1,7 +1,7 @@
 // `subagent_interrupt` (herdr branch): send Escape to a running subagent pane.
 //
-// Phase A2: extracted verbatim from index.ts. Descriptions, promptGuidelines
-// and parameter descriptions must stay byte-identical.
+// Descriptions, promptGuidelines and parameter descriptions are part of the
+// advertised surface and must stay byte-identical.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";

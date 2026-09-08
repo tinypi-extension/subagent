@@ -1,46 +1,22 @@
-// The legacy (non-herdr) blocking `subagent` tool.
+// The legacy (non-herdr) blocking `subagent` tool: single + parallel, one
+// tool result per call.
 //
-// Phase A2: extracted verbatim from the else-branch of index.ts's default
-// export. Descriptions, promptGuidelines and parameter descriptions must stay
-// byte-identical.
+// Descriptions, promptGuidelines and parameter descriptions are part of the
+// advertised surface and must stay byte-identical.
 
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import type { ToolAdvert } from "./advert.ts";
-import { AgentScopeSchema } from "./tool-schemas.ts";
+import { buildSubagentParamSchemas } from "./tool-schemas.ts";
 import { type AgentScope, discoverAgents } from "./agents.ts";
 import { executeDispatch, type DispatchParams } from "./dispatch.ts";
 import { renderCall, renderResult, type Theme } from "./render.ts";
 import { registerSteerRenderers } from "./herdr-tools/renderers.ts";
 
 export function registerBlockingTool(pi: ExtensionAPI, advert: ToolAdvert): void {
-	const {
-		registeredProfileNames,
-		registeredProfileSummary,
-		profileHint,
-		availableAgentsSentence,
-		agentParamHint,
-	} = advert;
+	const { registeredProfileNames, registeredProfileSummary, availableAgentsSentence } = advert;
 
-	const TaskItem = Type.Object({
-		agent: Type.String({ description: "Name of the agent to invoke" }),
-		task: Type.String({ description: "Task to delegate to the agent" }),
-		cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-		profile: Type.Optional(Type.String({ description: `Execution profile (model+thinking). ${profileHint}` })),
-	});
-
-	const SubagentParams = Type.Object({
-		agent: Type.Optional(Type.String({ description: agentParamHint })),
-		task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
-		tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
-		profile: Type.Optional(Type.String({ description: `Execution profile for this single task. ${profileHint}` })),
-		agentScope: Type.Optional(AgentScopeSchema),
-		confirmProjectAgents: Type.Optional(
-			Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
-		),
-		cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
-	});
+	const { params: SubagentParams } = buildSubagentParamSchemas("blocking", advert);
 
 	pi.registerTool({
 		name: "subagent",

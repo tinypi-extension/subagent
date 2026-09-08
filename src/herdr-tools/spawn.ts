@@ -1,20 +1,18 @@
 // The herdr-branch `subagent` tool: fire-and-forget spawn into herdr panes.
 //
-// Phase A2: extracted verbatim from index.ts. Descriptions, promptGuidelines
-// and parameter descriptions must stay byte-identical.
+// Descriptions, promptGuidelines and parameter descriptions are part of the
+// advertised surface and must stay byte-identical.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { Text } from "@earendil-works/pi-tui";
-import { Type } from "typebox";
 import type { ToolAdvert } from "../advert.ts";
-import { AgentScopeSchema } from "../tool-schemas.ts";
-import { type AgentConfig, type AgentScope, discoverAgents, formatAgentNames } from "../agents.ts";
-import { loadProfilesIfEnabled, resolveProfile, validateProfiles } from "../profiles.ts";
+import { buildSubagentParamSchemas } from "../tool-schemas.ts";
+import { type AgentConfig, type AgentScope, discoverAgents } from "../agents.ts";
+import { type SubagentProfile, loadProfilesIfEnabled, resolveProfile, validateProfiles } from "../profiles.ts";
 import { loadAgentDefFor, type AgentDefaults } from "../agent-defs.ts";
 import { buildLaunchPlan, type SubagentLaunchParams } from "../launch.ts";
-import { MAX_LISTED_AGENTS, MAX_PARALLEL_TASKS } from "../types.ts";
+import { MAX_PARALLEL_TASKS } from "../types.ts";
 import type { RunningSubagent } from "../watcher.ts";
 import {
 	armWatcher,
@@ -145,16 +143,18 @@ async function spawnOneSubagent(
 	};
 }
 
-async function executeSubagentSpawn(
-	pi: SteerSender,
-	params: HerdrSpawnParams,
-	ctx: HerdrToolContext,
-) {
-	const agentScope: AgentScope = params.agentScope ?? "both";
-	const discovery = discoverAgents(ctx.cwd, agentScope);
-	const agents = discovery.agents;
+/** Tool result returned by an early-exit stage (before anything is spawned). */
+interface SpawnErrorResult {
+	content: [{ type: "text"; text: string }];
+	details: { error: string; agentScope: AgentScope };
+}
 
-	// ── mode validation ──
+/** Exactly one of single (agent + task) or parallel (tasks) must be given. */
+function validateMode(
+	params: HerdrSpawnParams,
+	agents: AgentConfig[],
+	agentScope: AgentScope,
+): SpawnErrorResult | null {
 	const hasTasks = (params.tasks?.length ?? 0) > 0;
 	const hasSingle = Boolean(params.agent && params.task);
 	const modeCount = Number(hasTasks) + Number(hasSingle);
@@ -170,24 +170,13 @@ async function executeSubagentSpawn(
 			details: { error: "invalid parameters", agentScope },
 		};
 	}
+	return null;
+}
 
-	// ── profile validation (same semantics as the kept dispatch path) ──
-	const profiles = loadProfilesIfEnabled(ctx.cwd, ctx.isProjectTrusted());
-	const requestedProfiles: (string | undefined)[] = [];
-	if (params.tasks) for (const t of params.tasks) requestedProfiles.push(t.profile);
-	requestedProfiles.push(params.profile);
-	const invalid = validateProfiles(requestedProfiles, profiles);
-	if (invalid.length > 0) {
-		const validNames = Object.keys(profiles).join(", ") || "none";
-		return errorResult(
-			`Unknown subagent profile(s): ${invalid.join(", ")}. Available profiles: ${validNames}.`,
-			"unknown profile",
-		);
-	}
-
-	// ── collect requested spawns ──
+/** Turn the validated params into one spawn request per subagent. */
+function collectRequests(params: HerdrSpawnParams): { error: string } | HerdrSpawnRequest[] {
 	const requests: HerdrSpawnRequest[] = [];
-	if (hasSingle) {
+	if (Boolean(params.agent && params.task)) {
 		requests.push({
 			agent: params.agent!,
 			task: params.task!,
@@ -201,15 +190,7 @@ async function executeSubagentSpawn(
 		});
 	} else {
 		if ((params.tasks?.length ?? 0) > MAX_PARALLEL_TASKS) {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: `Too many parallel tasks (${params.tasks!.length}). Max is ${MAX_PARALLEL_TASKS}.`,
-					},
-				],
-				details: { error: "too many parallel tasks", agentScope },
-			};
+			return { error: `Too many parallel tasks (${params.tasks!.length}). Max is ${MAX_PARALLEL_TASKS}.` };
 		}
 		for (const t of params.tasks!) {
 			requests.push({
@@ -228,6 +209,104 @@ async function executeSubagentSpawn(
 			});
 		}
 	}
+	return requests;
+}
+
+/**
+ * Resolve and launch each request in order, accumulating acks and failures.
+ * Called only after every validation has passed: from here on, a request may
+ * create artifacts and panes (see spawnOneSubagent's failure contract).
+ */
+async function launchRequests(
+	pi: SteerSender,
+	requests: HerdrSpawnRequest[],
+	agents: AgentConfig[],
+	profiles: Record<string, SubagentProfile>,
+	parentDefaults: { model?: string; thinkingLevel?: ThinkingLevel },
+	ctx: HerdrToolContext,
+): Promise<{ spawned: SpawnedAck[]; failed: Array<{ agent: string; error: string }> }> {
+	const spawned: SpawnedAck[] = [];
+	const failed: Array<{ agent: string; error: string }> = [];
+	const usedNames = new Set<string>();
+
+	for (const request of requests) {
+		const agentConfig = agents.find((a) => a.name === request.agent);
+		if (!agentConfig) {
+			const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
+			failed.push({
+				agent: request.agent,
+				error: `Agent "${request.agent}" not found. Available agents: ${available}.`,
+			});
+			continue;
+		}
+
+		const profileName = request.profile;
+		const resolved = resolveProfile(
+			profileName ? profiles[profileName] : undefined,
+			agentConfig,
+			parentDefaults,
+		);
+
+		// Display name: explicit name (single mode) > agent name > "Subagent",
+		// deduplicated so interrupt-by-name stays unambiguous.
+		let name = request.name ?? agentConfig.name ?? "Subagent";
+		if (usedNames.has(name)) {
+			let n = 2;
+			while (usedNames.has(`${name}-${n}`)) n++;
+			name = `${name}-${n}`;
+		}
+		usedNames.add(name);
+
+		const agentDefs = loadAgentDefFor(agentConfig);
+		const result = await spawnOneSubagent(pi, { ...request, name }, resolved, agentDefs, ctx);
+		if ("error" in result) failed.push({ agent: request.agent, error: result.error });
+		else spawned.push(result.ack);
+	}
+
+	return { spawned, failed };
+}
+
+async function executeSubagentSpawn(
+	pi: SteerSender,
+	params: HerdrSpawnParams,
+	ctx: HerdrToolContext,
+) {
+	const agentScope: AgentScope = params.agentScope ?? "both";
+	const discovery = discoverAgents(ctx.cwd, agentScope);
+	const agents = discovery.agents;
+
+	// ── mode validation ──
+	const invalidMode = validateMode(params, agents, agentScope);
+	if (invalidMode) return invalidMode;
+
+	// ── profile validation (same semantics as the kept dispatch path) ──
+	const profiles = loadProfilesIfEnabled(ctx.cwd, ctx.isProjectTrusted());
+	const requestedProfiles: (string | undefined)[] = [];
+	if (params.tasks) for (const t of params.tasks) requestedProfiles.push(t.profile);
+	requestedProfiles.push(params.profile);
+	const invalid = validateProfiles(requestedProfiles, profiles);
+	if (invalid.length > 0) {
+		const validNames = Object.keys(profiles).join(", ") || "none";
+		return errorResult(
+			`Unknown subagent profile(s): ${invalid.join(", ")}. Available profiles: ${validNames}.`,
+			"unknown profile",
+		);
+	}
+
+	// ── collect requested spawns ──
+	const collected = collectRequests(params);
+	if ("error" in collected) {
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: collected.error,
+				},
+			],
+			details: { error: "too many parallel tasks", agentScope },
+		};
+	}
+	const requests = collected;
 
 	// ── confirmProjectAgents hook (kept from the dispatch path; the
 	// confirmation UI itself is intentionally disabled pending a
@@ -273,43 +352,7 @@ async function executeSubagentSpawn(
 		thinkingLevel: ctx.thinkingLevel,
 	};
 
-	const spawned: SpawnedAck[] = [];
-	const failed: Array<{ agent: string; error: string }> = [];
-	const usedNames = new Set<string>();
-
-	for (const request of requests) {
-		const agentConfig = agents.find((a) => a.name === request.agent);
-		if (!agentConfig) {
-			const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
-			failed.push({
-				agent: request.agent,
-				error: `Agent "${request.agent}" not found. Available agents: ${available}.`,
-			});
-			continue;
-		}
-
-		const profileName = request.profile;
-		const resolved = resolveProfile(
-			profileName ? profiles[profileName] : undefined,
-			agentConfig,
-			parentDefaults,
-		);
-
-		// Display name: explicit name (single mode) > agent name > "Subagent",
-		// deduplicated so interrupt-by-name stays unambiguous.
-		let name = request.name ?? agentConfig.name ?? "Subagent";
-		if (usedNames.has(name)) {
-			let n = 2;
-			while (usedNames.has(`${name}-${n}`)) n++;
-			name = `${name}-${n}`;
-		}
-		usedNames.add(name);
-
-		const agentDefs = loadAgentDefFor(agentConfig);
-		const result = await spawnOneSubagent(pi, { ...request, name }, resolved, agentDefs, ctx);
-		if ("error" in result) failed.push({ agent: request.agent, error: result.error });
-		else spawned.push(result.ack);
-	}
+	const { spawned, failed } = await launchRequests(pi, requests, agents, profiles, parentDefaults, ctx);
 
 	if (spawned.length === 0) {
 		const message = failed.map((f) => `${f.agent}: ${f.error}`).join("\n");
@@ -332,13 +375,10 @@ async function executeSubagentSpawn(
 }
 
 export function registerSubagentTool(pi: ExtensionAPI, advert: ToolAdvert): void {
-	// Registration-time advert for the herdr branch (per-call discovery remains
-	// authoritative; unknown names return the current list).
-	const agentNames = formatAgentNames(discoverAgents(process.cwd(), "both").agents, MAX_LISTED_AGENTS);
-	const namesText = agentNames.remaining > 0 ? `${agentNames.text} +${agentNames.remaining} more` : agentNames.text;
-	const agentsSentence = namesText
-		? `Available agents: ${namesText}. Passing an unknown name returns the full current list.`
-		: `No agents found at startup; project-local agents in ${CONFIG_DIR_NAME}/agents may still exist. Passing any name returns the current list.`;
+	// Registration-time advert for the herdr branch: the agent names come from
+	// the same load-time discovery the blocking branch advertises (per-call
+	// discovery remains authoritative; unknown names return the current list).
+	const agentsSentence = advert.herdrAgentsSentence;
 
 	const profileSentence =
 		advert.registeredProfileNames.length > 0
@@ -355,36 +395,7 @@ export function registerSubagentTool(pi: ExtensionAPI, advert: ToolAdvert): void
 		`Modes: single (agent + task) or parallel (tasks array). ${agentsSentence} ${profileSentence}`,
 	].join(" ");
 
-	const HerdrTaskItem = Type.Object({
-		agent: Type.String({ description: "Name of the agent to invoke" }),
-		task: Type.String({ description: "Task to delegate to the agent" }),
-		cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-		profile: Type.Optional(Type.String({ description: `Execution profile (model+thinking). ${advert.profileHint}` })),
-	});
-
-	const HerdrSubagentParams = Type.Object({
-		agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (single mode)" })),
-		task: Type.Optional(Type.String({ description: "Task to delegate (single mode)" })),
-		tasks: Type.Optional(Type.Array(HerdrTaskItem, { description: "Array of {agent, task} for parallel fire-and-forget execution" })),
-		profile: Type.Optional(Type.String({ description: `Execution profile for this single task. ${advert.profileHint}` })),
-		agentScope: Type.Optional(AgentScopeSchema),
-		confirmProjectAgents: Type.Optional(
-			Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
-		),
-		cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
-		name: Type.Optional(
-			Type.String({ description: "Display name for the subagent (single mode). Default: the agent's name, or 'Subagent'." }),
-		),
-		model: Type.Optional(Type.String({ description: "Model override (overrides agent default)" })),
-		tools: Type.Optional(Type.String({ description: "Comma-separated tools (overrides agent default)" })),
-		systemPrompt: Type.Optional(Type.String({ description: "Role instructions appended to the system prompt (used when the agent has no definition body)" })),
-		interactive: Type.Optional(
-			Type.Boolean({
-				description:
-					"Mark the subagent as interactive (long-running, user drives the conversation in its own pane). If omitted, falls back to the agent's `interactive` frontmatter, otherwise the inverse of `auto-exit`.",
-			}),
-		),
-	});
+	const { params: HerdrSubagentParams } = buildSubagentParamSchemas("herdr", advert);
 
 	pi.registerTool({
 		name: "subagent",

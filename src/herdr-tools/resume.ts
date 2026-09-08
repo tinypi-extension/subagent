@@ -1,7 +1,7 @@
 // `subagent_resume` (herdr branch): re-open a previous session in a new pane.
 //
-// Phase A2: extracted verbatim from index.ts. Descriptions, promptGuidelines
-// and parameter descriptions must stay byte-identical.
+// Descriptions, promptGuidelines and parameter descriptions are part of the
+// advertised surface and must stay byte-identical.
 
 import { existsSync, rmSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

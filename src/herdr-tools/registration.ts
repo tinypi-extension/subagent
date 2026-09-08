@@ -1,8 +1,6 @@
-// Registration of the whole herdr activation branch.
-//
-// Phase A2: extracted verbatim from index.ts — the PI_DENY_TOOLS filter, the
-// four tool registrations, the session_start registry-race check + readiness
-// notify, the session_shutdown cleanup, and the steer renderers.
+// Registration of the whole herdr activation branch: the PI_DENY_TOOLS filter,
+// the four tool registrations, the session_start registry-race check +
+// readiness notify, the session_shutdown cleanup, and the steer renderers.
 
 import { realpathSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

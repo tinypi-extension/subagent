@@ -1,7 +1,7 @@
 // Shared helpers and context types for the herdr tool modules.
 //
-// Phase A2: extracted verbatim from index.ts. Nothing here touches runtime
-// state — this module must never import runtime.ts (cycle safety).
+// Nothing here touches runtime state — this module must never import
+// runtime.ts (cycle safety).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import * as path from "node:path";

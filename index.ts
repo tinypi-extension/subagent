@@ -18,19 +18,20 @@
  *
  * This entry point is intentionally thin: it wires load-time state and picks
  * a branch. Implementation lives in modules to keep this file small:
- *   - dispatch.ts   - execute orchestration (single/parallel) — fallback
- *   - run.ts        - spawning and parsing individual subagent processes
- *   - render.ts     - TUI rendering for calls and results
- *   - format.ts     - formatting / output helpers
- *   - types.ts      - shared types and constants
- *   - agents.ts     - agent discovery and configuration
- *   - profiles.ts   - profile loading and resolution
- *   - src/launch.ts - herdr launch planning (artifacts + wrapper script)
- *   - src/watcher.ts - per-subagent lifecycle classification
- *   - src/messages.ts - outcome → steer message builders + renderers
- *   - src/blocking.ts        - the legacy blocking `subagent` tool
- *   - src/advert.ts          - load-time profiles/agents advertising context
- *   - src/herdr-tools/*.ts   - the herdr branch (spawn/resume/interrupt/list,
+ *   - src/dispatch.ts       - execute orchestration (single/parallel) — fallback
+ *   - src/run.ts            - spawning and parsing individual subagent processes
+ *   - src/render.ts         - TUI rendering for calls and results
+ *   - src/format.ts         - formatting / output helpers
+ *   - src/types.ts          - shared types and constants
+ *   - src/agents.ts         - agent discovery and configuration
+ *   - src/profiles.ts       - profile loading and resolution
+ *   - src/launch.ts         - herdr launch planning (artifacts + wrapper script)
+ *   - src/watcher.ts        - per-subagent lifecycle classification
+ *   - src/messages.ts       - outcome → steer message builders + renderers
+ *   - src/advert.ts         - load-time profiles/agents advertising context
+ *   - src/tool-schemas.ts   - shared TypeBox parameter schemas
+ *   - src/blocking.ts       - the legacy blocking `subagent` tool
+ *   - src/herdr-tools/*.ts  - the herdr branch (spawn/resume/interrupt/list,
  *                             shared runtime state, registration)
  *
  * The herdr branch ports pi-herdr-subagents/index.ts (orchestrator part):

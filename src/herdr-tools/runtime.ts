@@ -1,6 +1,6 @@
 // Shared mutable runtime state + lifecycle for the herdr branch.
 //
-// Phase A2: extracted from index.ts. The state lives at MODULE scope (not
+// The state lives at MODULE scope (not
 // globalThis): pi re-imports index.ts on /reload while this module stays
 // cached, so index.ts calls rearm() at load time to abort the previous
 // module's watchers and close its event stream.

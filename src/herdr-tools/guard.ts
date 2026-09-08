@@ -1,7 +1,8 @@
-// herdr activation guard.
+// herdr activation guard: the herdr environment check and the settings opt-in.
+// Both must pass for the fire-and-forget branch to activate.
 //
-// Phase A2: extracted verbatim from index.ts (these were exported from the
-// entry point and are re-exported there so importers keep working).
+// These are re-exported from the entry point so importers of index.ts keep
+// working (they are part of its public surface).
 
 import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";

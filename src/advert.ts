@@ -1,8 +1,12 @@
 // Load-time tool advertising context (profiles + agent names).
 //
-// Phase A2: extracted verbatim from the top of index.ts. The values are baked
-// once at load time so the model can see them in tool descriptions and
-// parameter hints; per-call discovery remains authoritative everywhere.
+// The values are baked once at load time so the model can see them in tool
+// descriptions and parameter hints. Agents are discovered ONCE here and both
+// branch-specific wordings are derived from that single list, so the two
+// activation branches can never advertise different agent names.
+//
+// Per-call discovery (discoverAgents(ctx.cwd, agentScope) inside each execute)
+// remains authoritative; an unknown name is answered with the current list.
 
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -18,7 +22,10 @@ export interface ToolAdvert {
 	registeredProfileNames: string[];
 	registeredProfileSummary: string;
 	profileHint: string;
+	/** Blocking-branch wording: notes the list is a startup snapshot. */
 	availableAgentsSentence: string;
+	/** herdr-branch wording: same names, terser sentence. */
+	herdrAgentsSentence: string;
 	agentParamHint: string;
 }
 
@@ -62,12 +69,19 @@ export function buildAdvertContext(): ToolAdvert {
 	const agentParamHint = hasAgentNames
 		? `Name of the agent to invoke (for single mode; the same names apply to items in tasks). Valid: ${agentNamesText}. Passing an unknown name returns the current list.`
 		: `Name of the agent to invoke (for single mode; the same names apply to items in tasks). No agents were found at startup; passing any name returns the current list.`;
+	// Same names, herdr wording: it drops the "captured at startup" clause because
+	// the fire-and-forget description is already long. Both sentences are derived
+	// from agentNamesText above, so they always list the same agents.
+	const herdrAgentsSentence = agentNamesText
+		? `Available agents: ${agentNamesText}. Passing an unknown name returns the full current list.`
+		: `No agents found at startup; project-local agents in ${CONFIG_DIR_NAME}/agents may still exist. Passing any name returns the current list.`;
 
 	return {
 		registeredProfileNames,
 		registeredProfileSummary,
 		profileHint,
 		availableAgentsSentence,
+		herdrAgentsSentence,
 		agentParamHint,
 	};
 }
