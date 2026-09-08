@@ -661,11 +661,11 @@ describe("herdr capability check", () => {
 		assert.ok(!existsSync(join(fixture.sessionDir, "artifacts")));
 	});
 
-	it("rejects herdr versions older than 0.8.2", async () => {
+	it("rejects herdr versions older than 0.7.0", async () => {
 		const fixture = makeFixture();
 		makeHerdrEnv(fixture);
 		const { client } = makeFakeClient({
-			ping: async () => ({ ok: true, version: "0.8.1" }),
+			ping: async () => ({ ok: true, version: "0.6.9" }),
 		});
 		const watched: any[] = [];
 		installFakeDeps(client, watched);
@@ -677,7 +677,7 @@ describe("herdr capability check", () => {
 		const ctx = fake.makeCtx({ cwd: fixture.cwd });
 		const result = await tool.execute("call1", { agent: "worker", task: "x" }, undefined, undefined, ctx);
 
-		assert.ok(result.content[0].text.includes("herdr >= 0.8.2 is required"));
+		assert.ok(result.content[0].text.includes("herdr >= 0.7.0 is required"));
 		assert.equal(watched.length, 0);
 	});
 
@@ -703,12 +703,12 @@ describe("herdr capability check", () => {
 
 	it("versionAtLeast compares semver-ish versions", () => {
 		const { versionAtLeast } = __test__ as any;
-		assert.equal(versionAtLeast("0.8.2", "0.8.2"), true);
-		assert.equal(versionAtLeast("0.8.3", "0.8.2"), true);
-		assert.equal(versionAtLeast("0.9.0", "0.8.2"), true);
-		assert.equal(versionAtLeast("0.8.1", "0.8.2"), false);
-		assert.equal(versionAtLeast("0.7.9", "0.8.2"), false);
-		assert.equal(versionAtLeast("v0.8.2", "0.8.2"), true);
+		assert.equal(versionAtLeast("0.7.0", "0.7.0"), true);
+		assert.equal(versionAtLeast("0.7.1", "0.7.0"), true);
+		assert.equal(versionAtLeast("0.8.0", "0.7.0"), true);
+		assert.equal(versionAtLeast("0.6.9", "0.7.0"), false);
+		assert.equal(versionAtLeast("0.6.10", "0.7.0"), false);
+		assert.equal(versionAtLeast("v0.7.0", "0.7.0"), true);
 	});
 });
 

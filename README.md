@@ -148,7 +148,7 @@ Passing an **unknown** profile name is a hard error that lists the valid names; 
 
 ### Herdr mode (opt-in)
 
-When running **inside a herdr pane** (`HERDR_ENV=1` + `HERDR_PANE_ID` + `HERDR_SOCKET_PATH`), the extension can switch to herdr-native tools: `subagent` becomes fire-and-forget (subagents launch as herdr plugin panes, spawn returns a ~1s ack, results arrive as `subagent_result`/`subagent_ping` steer messages), plus `subagent_resume`, `subagent_interrupt`, and `subagents_list`. Requires the `pi-herdr-subagents` plugin to be linked (`herdr plugin link <extension>/herdr-plugin --enabled`) and herdr ≥ 0.8.2.
+When running **inside a herdr pane** (`HERDR_ENV=1` + `HERDR_PANE_ID` + `HERDR_SOCKET_PATH`), the extension can switch to herdr-native tools: `subagent` becomes fire-and-forget (subagents launch as herdr plugin panes, spawn returns a ~1s ack, results arrive as `subagent_result`/`subagent_ping` steer messages), plus `subagent_resume`, `subagent_interrupt`, and `subagents_list`. Requires the `pi-herdr-subagents` plugin to be linked (`herdr plugin link <extension>/herdr-plugin --enabled`) and herdr ≥ 0.7.0.
 
 This mode is **off by default**. Enable it by setting `subagent.herdr` to the boolean `true` in the global `~/.pi/agent/settings.json`:
 

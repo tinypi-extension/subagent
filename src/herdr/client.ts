@@ -47,7 +47,7 @@ export interface PluginInfo {
 export const HERDR_PLUGIN_ID = "pi-herdr-subagents";
 export const HERDR_PLUGIN_ENTRYPOINT = "subagent";
 export const HERDR_PLUGIN_ARGV_ENTRYPOINT = "argv";
-export const MIN_HERDR_VERSION = "0.8.2";
+export const MIN_HERDR_VERSION = "0.7.0";
 
 export interface HerdrClient {
   /**
