@@ -524,6 +524,68 @@ describe("herdr subagent spawn", () => {
 		assert.equal(watched.length, 1);
 	});
 
+	it("shows [profile] in the spawn ack and TUI result when a profile is used", async () => {
+		const fixture = makeFixture();
+		makeHerdrEnv(fixture);
+		const { client } = makeFakeClient();
+		installFakeDeps(client, []);
+
+		const fake = makeFakePi();
+		registerExtension(fake.pi);
+		const tool = toolByName(fake.tools, "subagent");
+
+		const ctx = fake.makeCtx({
+			cwd: fixture.cwd,
+			sessionManager: {
+				getSessionFile: () => undefined,
+				getSessionId: () => "parent-session-id",
+				getSessionDir: () => fixture.sessionDir,
+			},
+		});
+
+		const withProfile = await tool.execute("call1", { agent: "worker", task: "x", profile: "fast" }, undefined, undefined, ctx);
+		const text: string = withProfile.content[0].text;
+		assert.ok(text.includes("spawned worker (pane pane-1) [fast]"), text);
+		assert.equal(withProfile.details.spawned[0].profile, "fast");
+
+		const withoutProfile = await tool.execute("call2", { agent: "worker", task: "y" }, undefined, undefined, ctx);
+		const text2: string = withoutProfile.content[0].text;
+		assert.ok(text2.includes("spawned worker (pane pane-2)"), text2);
+		assert.ok(!text2.includes("[]"), text2);
+		assert.equal(withoutProfile.details.spawned[0].profile, undefined);
+	});
+
+	it("renders [profile] in the TUI result view", async () => {
+		const fixture = makeFixture();
+		makeHerdrEnv(fixture);
+		const { client } = makeFakeClient();
+		installFakeDeps(client, []);
+
+		const fake = makeFakePi();
+		registerExtension(fake.pi);
+		const tool = toolByName(fake.tools, "subagent");
+
+		const theme = { fg: (_s: string, t: string) => t, bold: (t: string) => t };
+		const started = {
+			content: [{ type: "text", text: "spawned worker (pane pane-1) [fast]" }],
+			details: {
+				status: "started",
+				agentScope: "both",
+				spawned: [{ name: "worker", paneId: "pane-1", profile: "fast" }],
+				failed: [],
+			},
+		};
+		const rendered = tool.renderResult(started as any, {}, theme as any);
+		assert.ok((rendered as any).text.includes("[fast]"), (rendered as any).text);
+
+		const noProfile = {
+			...started,
+			details: { ...started.details, spawned: [{ name: "worker", paneId: "pane-1" }] },
+		};
+		const rendered2 = tool.renderResult(noProfile as any, {}, theme as any);
+		assert.ok(!(rendered2 as any).text.includes("[]"), (rendered2 as any).text);
+	});
+
 	it("rejects self-spawn via PI_SUBAGENT_AGENT", async () => {
 		const fixture = makeFixture();
 		makeHerdrEnv(fixture);

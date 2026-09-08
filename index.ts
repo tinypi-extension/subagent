@@ -439,6 +439,8 @@ interface SpawnedAck {
 	name: string;
 	agent?: string;
 	paneId: string;
+	/** Profile name requested for this spawn (model+thinking override); absent when none. */
+	profile?: string;
 	sessionFile: string;
 	launchScriptFile: string;
 }
@@ -517,6 +519,7 @@ async function spawnOneSubagent(
 			id: running.id,
 			name: running.name,
 			agent: running.agent,
+			profile: request.profile,
 			paneId: running.paneId,
 			sessionFile: running.sessionFile,
 			launchScriptFile: running.launchScriptFile,
@@ -696,7 +699,7 @@ async function executeSubagentSpawn(
 	}
 
 	const lines = [
-		...spawned.map((s) => `spawned ${s.name} (pane ${s.paneId})`),
+		...spawned.map((s) => `spawned ${s.name} (pane ${s.paneId})${s.profile ? ` [${s.profile}]` : ""}`),
 		...failed.map((f) => `failed ${f.agent}: ${f.error}`),
 	];
 	return {
@@ -819,12 +822,14 @@ function registerSubagentTool(pi: ExtensionAPI): void {
 		renderResult(result, _opts, theme) {
 			const details = result.details as any;
 			if (details?.status === "started") {
-				const spawned: Array<{ name: string; paneId: string }> = details.spawned ?? [];
+				const spawned: Array<{ name: string; paneId: string; profile?: string }> = details.spawned ?? [];
 				const first = spawned[0];
+				const profileTag = first?.profile ? theme.fg("dim", ` [${first.profile}]`) : "";
 				const text =
 					theme.fg("accent", "▸") +
 					" " +
 					theme.fg("toolTitle", theme.bold(first?.name ?? "subagent")) +
+					profileTag +
 					theme.fg("dim", first ? ` — spawned (pane ${first.paneId})` : " — started");
 				return new Text(text, 0, 0);
 			}
