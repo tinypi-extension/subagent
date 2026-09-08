@@ -19,7 +19,8 @@
 //   `resolveLaunchBehaviorStandalone`, which always yields artifact delivery.
 // - Params typed as a plain interface instead of the extension's typebox schema.
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import type { AgentConfig } from "./agents.ts";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 /**
@@ -225,6 +226,17 @@ export function loadAgentDefaults(
     if (parsed) return parsed;
   }
   return null;
+}
+
+/** Agent-def defaults for a discovered agent: parse the discovered file itself. */
+export function loadAgentDefFor(agentConfig: AgentConfig): AgentDefaults | null {
+  try {
+    const parsed = parseAgentDefinition(readFileSync(agentConfig.filePath, "utf8"), agentConfig.name);
+    if (parsed) return parsed;
+  } catch {
+    // fall through to directory lookup below
+  }
+  return loadAgentDefaults(agentConfig.name, [dirname(agentConfig.filePath)]);
 }
 
 export function resolveSubagentPaths(
