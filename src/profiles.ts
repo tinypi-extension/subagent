@@ -14,6 +14,15 @@ const VALID_THINKING: ReadonlySet<string> = new Set([
   "off", "minimal", "low", "medium", "high", "xhigh", "max",
 ]);
 
+/**
+ * Built-in profile name: run the subagent with the parent session's *current*
+ * model and thinking level (pinned at spawn time, overriding the agent
+ * definition's own model). Always valid, even when custom profiles are
+ * disabled; a user-defined profile named "current" takes precedence over the
+ * built-in.
+ */
+export const CURRENT_PROFILE = "current";
+
 function isThinkingLevel(v: unknown): v is ThinkingLevel {
   return typeof v === "string" && VALID_THINKING.has(v);
 }
@@ -60,23 +69,26 @@ export function loadProfilesFrom(file: string): Record<string, SubagentProfile> 
 
 /**
  * Render the available profiles as a compact human-readable list so the LLM
- * can pick one by name without reading settings.json.
+ * can pick one by name without reading settings.json. The built-in "current"
+ * profile is always listed first.
  *
- * e.g. "low (model=anthropic/claude-3.5-haiku, thinking=off), high (thinking=medium)"
- * or "no profiles defined" when the map is empty.
+ * e.g. "current (model+thinking = this session's current values), low (model=anthropic/claude-3.5-haiku, thinking=off), high (thinking=medium)"
  */
 export function formatProfileSummary(profiles: Record<string, SubagentProfile>): string {
-  const names = Object.keys(profiles);
-  if (names.length === 0) return "no profiles defined";
-  return names
-    .map((n) => {
-      const p = profiles[n];
-      const parts: string[] = [];
-      if (p.model) parts.push(`model=${p.model}`);
-      if (p.thinking) parts.push(`thinking=${p.thinking}`);
-      return parts.length ? `${n} (${parts.join(", ")})` : n;
-    })
-    .join(", ");
+  const render = (n: string): string => {
+    const p = profiles[n];
+    const parts: string[] = [];
+    if (p.model) parts.push(`model=${p.model}`);
+    if (p.thinking) parts.push(`thinking=${p.thinking}`);
+    return parts.length ? `${n} (${parts.join(", ")})` : n;
+  };
+  const builtin = `current (model+thinking = this session's current values)`;
+  // A user-defined "current" replaces the built-in description line entirely.
+  if (Object.hasOwn(profiles, CURRENT_PROFILE)) {
+    return Object.keys(profiles).map(render).join(", ");
+  }
+  const custom = Object.keys(profiles).map(render).join(", ");
+  return custom ? `${builtin}, ${custom}` : builtin;
 }
 
 export function loadProfiles(cwd: string, projectTrusted: boolean): Record<string, SubagentProfile> {
@@ -102,11 +114,59 @@ export function validateProfiles(
   const invalid: string[] = [];
   for (const name of requested) {
     if (name === undefined) continue;
-    if (seen.has(name)) continue;
-    seen.add(name);
-    if (!Object.hasOwn(available, name)) invalid.push(name);
+    const key = name.trim();
+    if (key === "") continue; // caught by the compulsory-profile check
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (key === CURRENT_PROFILE) continue; // built-in, always valid
+    if (!Object.hasOwn(available, key)) invalid.push(key);
   }
   return invalid;
+}
+
+/**
+ * Look up a requested profile by name. The built-in "current" profile is not
+ * stored in the map; it resolves to the parent session's live model+thinking
+ * (which then wins over any agent-definition model in resolveProfile). A
+ * user-defined profile named "current" overrides the built-in.
+ */
+export function lookupProfile(
+  profileName: string | undefined,
+  profiles: Record<string, SubagentProfile>,
+  parent: DispatchDefaults,
+): SubagentProfile | undefined {
+  if (profileName === undefined) return undefined;
+  const key = profileName.trim();
+  if (key === "") return undefined;
+  if (key === CURRENT_PROFILE && !Object.hasOwn(profiles, CURRENT_PROFILE)) {
+    const cur: SubagentProfile = {};
+    if (parent.model !== undefined) cur.model = parent.model;
+    if (parent.thinkingLevel !== undefined) cur.thinking = parent.thinkingLevel;
+    return cur;
+  }
+  // hasOwn guard: defense-in-depth against prototype-chain names if a caller
+  // ever skips validateProfiles.
+  return Object.hasOwn(profiles, key) ? profiles[key] : undefined;
+}
+
+/** Every valid profile name for error/advertising text: built-in "current" first. */
+export function availableProfileNames(profiles: Record<string, SubagentProfile>): string[] {
+  return Object.hasOwn(profiles, CURRENT_PROFILE)
+    ? Object.keys(profiles)
+    : [CURRENT_PROFILE, ...Object.keys(profiles)];
+}
+
+/**
+ * Error text for a missing (or empty) profile parameter. The profile param is
+ * compulsory: every spawned subagent must name one explicitly.
+ */
+export function profileRequiredMessage(profiles: Record<string, SubagentProfile>): string {
+  return (
+    "The profile parameter is compulsory: every subagent must name an execution profile " +
+    `(single mode: top-level "profile"; parallel mode: "profile" on each task). ` +
+    `Use "${CURRENT_PROFILE}" to run with this session's current model+thinking, or pick one of: ` +
+    `${availableProfileNames(profiles).join(", ")}.`
+  );
 }
 
 export function resolveProfile(

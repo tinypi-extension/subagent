@@ -9,7 +9,7 @@ import { Text } from "@earendil-works/pi-tui";
 import type { ToolAdvert } from "../advert.ts";
 import { buildSubagentParamSchemas } from "../tool-schemas.ts";
 import { type AgentConfig, type AgentScope, discoverAgents } from "../agents.ts";
-import { type SubagentProfile, loadProfilesIfEnabled, resolveProfile, validateProfiles } from "../profiles.ts";
+import { type SubagentProfile, availableProfileNames, loadProfilesIfEnabled, lookupProfile, profileRequiredMessage, resolveProfile, validateProfiles } from "../profiles.ts";
 import { loadAgentDefFor, type AgentDefaults } from "../agent-defs.ts";
 import { buildLaunchPlan, type SubagentLaunchParams } from "../launch.ts";
 import { MAX_PARALLEL_TASKS } from "../types.ts";
@@ -31,7 +31,8 @@ interface HerdrSpawnRequest {
 	agent: string;
 	task: string;
 	cwd?: string;
-	profile?: string;
+	/** Effective profile for this spawn; guaranteed non-empty after collectRequests. */
+	profile: string;
 	/** Resolved by the caller (single-mode param > agent name > "Subagent"); may be unset during collection. */
 	name?: string;
 	/** Explicit tool-parameter overrides (target's optional params). */
@@ -150,6 +151,7 @@ async function spawnOneSubagent(
 interface SpawnErrorResult {
 	content: [{ type: "text"; text: string }];
 	details: { error: string; agentScope: AgentScope };
+	isError: true;
 }
 
 /** Exactly one of single (agent + task) or parallel (tasks) must be given. */
@@ -171,15 +173,24 @@ function validateMode(
 				},
 			],
 			details: { error: "invalid parameters", agentScope },
+			isError: true,
 		};
 	}
 	return null;
 }
 
 /** Turn the validated params into one spawn request per subagent. */
-function collectRequests(params: HerdrSpawnParams): { error: string } | HerdrSpawnRequest[] {
+function collectRequests(
+	params: HerdrSpawnParams,
+	profiles: Record<string, SubagentProfile>,
+): { error: string; code: string } | HerdrSpawnRequest[] {
 	const requests: HerdrSpawnRequest[] = [];
 	if (Boolean(params.agent && params.task)) {
+		// The profile parameter is compulsory in single mode. It stays schema-optional
+		// because parallel mode carries it per task item; enforce it here.
+		if (!params.profile?.trim()) {
+			return { error: profileRequiredMessage(profiles), code: "missing profile" };
+		}
 		requests.push({
 			agent: params.agent!,
 			task: params.task!,
@@ -193,9 +204,14 @@ function collectRequests(params: HerdrSpawnParams): { error: string } | HerdrSpa
 		});
 	} else {
 		if ((params.tasks?.length ?? 0) > MAX_PARALLEL_TASKS) {
-			return { error: `Too many parallel tasks (${params.tasks!.length}). Max is ${MAX_PARALLEL_TASKS}.` };
+			return { error: `Too many parallel tasks (${params.tasks!.length}). Max is ${MAX_PARALLEL_TASKS}.`, code: "too many parallel tasks" };
 		}
 		for (const t of params.tasks!) {
+			// Parallel mode: every task item must name a profile (the schema
+			// requires it; this also catches empty strings from direct calls).
+			if (!t.profile?.trim()) {
+				return { error: profileRequiredMessage(profiles), code: "missing profile" };
+			}
 			requests.push({
 				agent: t.agent,
 				task: t.task,
@@ -243,9 +259,8 @@ async function launchRequests(
 			continue;
 		}
 
-		const profileName = request.profile;
 		const resolved = resolveProfile(
-			profileName ? profiles[profileName] : undefined,
+			lookupProfile(request.profile, profiles, parentDefaults),
 			agentConfig,
 			parentDefaults,
 		);
@@ -289,15 +304,15 @@ async function executeSubagentSpawn(
 	requestedProfiles.push(params.profile);
 	const invalid = validateProfiles(requestedProfiles, profiles);
 	if (invalid.length > 0) {
-		const validNames = Object.keys(profiles).join(", ") || "none";
+		const validNames = availableProfileNames(profiles).join(", ");
 		return errorResult(
 			`Unknown subagent profile(s): ${invalid.join(", ")}. Available profiles: ${validNames}.`,
 			"unknown profile",
 		);
 	}
 
-	// ── collect requested spawns ──
-	const collected = collectRequests(params);
+	// ── collect requested spawns (also enforces the compulsory profile) ──
+	const collected = collectRequests(params, profiles);
 	if ("error" in collected) {
 		return {
 			content: [
@@ -306,7 +321,8 @@ async function executeSubagentSpawn(
 					text: collected.error,
 				},
 			],
-			details: { error: "too many parallel tasks", agentScope },
+			details: { error: collected.code, agentScope },
+			isError: true,
 		};
 	}
 	const requests = collected;
@@ -386,8 +402,8 @@ export function registerSubagentTool(pi: ExtensionAPI, advert: ToolAdvert): void
 
 	const profileSentence =
 		advert.registeredProfileNames.length > 0
-			? `Profiles (model+thinking overrides): ${advert.registeredProfileSummary}.`
-			: "No subagent profiles are defined; each subagent uses its own model/settings.";
+			? `The profile parameter is compulsory (model+thinking overrides): ${advert.registeredProfileSummary}.`
+			: `The profile parameter is compulsory: ${advert.registeredProfileSummary}.`;
 
 	const description = [
 		"Delegate tasks to specialized subagents running in dedicated herdr panes with isolated context.",

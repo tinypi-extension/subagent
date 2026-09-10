@@ -484,7 +484,7 @@ describe("herdr subagent spawn", () => {
 			},
 		});
 
-		const result = await tool.execute("call1", { agent: "worker", task: "do the thing" }, undefined, undefined, ctx);
+		const result = await tool.execute("call1", { agent: "worker", task: "do the thing", profile: "current" }, undefined, undefined, ctx);
 
 		const text: string = result.content[0].text;
 		assert.ok(text.includes("spawned worker (pane pane-1)"), text);
@@ -573,9 +573,61 @@ describe("herdr subagent spawn", () => {
 
 		const withoutProfile = await tool.execute("call2", { agent: "worker", task: "y" }, undefined, undefined, ctx);
 		const text2: string = withoutProfile.content[0].text;
-		assert.ok(text2.includes("spawned worker (pane pane-2)"), text2);
-		assert.ok(!text2.includes("[]"), text2);
-		assert.equal(withoutProfile.details.spawned[0].profile, undefined);
+		// The profile parameter is compulsory: a single-mode call without one errors
+		// and spawns nothing.
+		assert.ok(withoutProfile.isError, text2);
+		assert.ok(text2.includes("compulsory"), text2);
+	});
+
+	it("runs single-mode spawn without profile as a hard error listing options", async () => {
+		const fixture = makeFixture();
+		makeHerdrEnv(fixture);
+		const { client, calls } = makeFakeClient();
+		installFakeDeps(client, []);
+
+		const fake = makeFakePi();
+		registerExtension(fake.pi);
+		const tool = toolByName(fake.tools, "subagent");
+
+		const ctx = fake.makeCtx({ cwd: fixture.cwd });
+		const result = await tool.execute("call1", { agent: "worker", task: "x", profile: "" }, undefined, undefined, ctx);
+		assert.ok(result.isError);
+		assert.ok(result.content[0].text.includes("current"), result.content[0].text);
+		assert.ok(result.content[0].text.includes("fast"), result.content[0].text);
+		assert.equal(calls.paneStart.length, 0);
+	});
+
+	it('built-in "current" profile pins the parent session\'s model+thinking over the agent def', async () => {
+		const fixture = makeFixture();
+		makeHerdrEnv(fixture);
+		const { client } = makeFakeClient();
+		const watched: any[] = [];
+		installFakeDeps(client, watched);
+
+		const fake = makeFakePi();
+		registerExtension(fake.pi);
+		const tool = toolByName(fake.tools, "subagent");
+
+		const ctx = fake.makeCtx({
+			cwd: fixture.cwd,
+			model: { provider: "test", id: "parent-model" },
+			thinkingLevel: "high",
+			sessionManager: {
+				getSessionFile: () => undefined,
+				getSessionId: () => "parent-session-id",
+				getSessionDir: () => fixture.sessionDir,
+			},
+		});
+
+		// The fixture's worker agent defines `model: test/model`; "current" must beat it.
+		const result = await tool.execute("call1", { agent: "worker", task: "x", profile: "current" }, undefined, undefined, ctx);
+		assert.ok(!result.isError, result.content[0].text);
+		assert.equal(result.details.spawned[0].profile, "current");
+
+		const { scriptDir } = artifactDirs(fixture);
+		const script = readdirSync(scriptDir).map((f) => join(scriptDir, f)).map((p) => readFileSync(p, "utf8") as string).join("\n");
+		assert.ok(script.includes("'--model' 'test/parent-model'"), script);
+		assert.ok(script.includes("'--thinking' 'high'"), script);
 	});
 
 	it("renders [profile] in the TUI result view", async () => {
@@ -622,7 +674,7 @@ describe("herdr subagent spawn", () => {
 		const tool = toolByName(fake.tools, "subagent");
 
 		const ctx = fake.makeCtx({ cwd: fixture.cwd });
-		const result = await tool.execute("call1", { agent: "worker", task: "x" }, undefined, undefined, ctx);
+		const result = await tool.execute("call1", { agent: "worker", task: "x", profile: "fast" }, undefined, undefined, ctx);
 
 		assert.ok(result.isError);
 		assert.ok(result.content[0].text.includes("do not start another worker"));
@@ -655,8 +707,8 @@ describe("herdr subagent spawn", () => {
 			"call1",
 			{
 				tasks: [
-					{ agent: "worker", task: "a" },
-					{ agent: "worker", task: "b" },
+					{ agent: "worker", task: "a", profile: "fast" },
+					{ agent: "worker", task: "b", profile: "current" },
 				],
 			},
 			undefined,
@@ -736,7 +788,7 @@ describe("herdr capability check", () => {
 				getSessionDir: () => fixture.sessionDir,
 			},
 		});
-		const result = await tool.execute("call1", { agent: "worker", task: "x" }, undefined, undefined, ctx);
+		const result = await tool.execute("call1", { agent: "worker", task: "x", profile: "fast" }, undefined, undefined, ctx);
 
 		assert.ok(result.content[0].text.includes("Cannot start subagent"));
 		assert.ok(result.content[0].text.includes("herdr server is not reachable"));
@@ -760,7 +812,7 @@ describe("herdr capability check", () => {
 		const tool = toolByName(fake.tools, "subagent");
 
 		const ctx = fake.makeCtx({ cwd: fixture.cwd });
-		const result = await tool.execute("call1", { agent: "worker", task: "x" }, undefined, undefined, ctx);
+		const result = await tool.execute("call1", { agent: "worker", task: "x", profile: "fast" }, undefined, undefined, ctx);
 
 		assert.ok(result.content[0].text.includes("herdr >= 0.7.0 is required"));
 		assert.equal(watched.length, 0);
@@ -780,7 +832,7 @@ describe("herdr capability check", () => {
 		const tool = toolByName(fake.tools, "subagent");
 
 		const ctx = fake.makeCtx({ cwd: fixture.cwd });
-		const result = await tool.execute("call1", { agent: "worker", task: "x" }, undefined, undefined, ctx);
+		const result = await tool.execute("call1", { agent: "worker", task: "x", profile: "fast" }, undefined, undefined, ctx);
 
 		assert.ok(result.content[0].text.includes("plugin is not linked"));
 		assert.equal(watched.length, 0);
@@ -1063,7 +1115,7 @@ describe("herdr lifecycle", () => {
 				getSessionDir: () => fixture.sessionDir,
 			},
 		});
-		await tool.execute("call1", { agent: "worker", task: "x" }, undefined, undefined, ctx);
+		await tool.execute("call1", { agent: "worker", task: "x", profile: "fast" }, undefined, undefined, ctx);
 		assert.equal(__test__.runningSubagents.size, 1);
 
 		const shutdown = (fake.handlers.get("session_shutdown") ?? [])[0];

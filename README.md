@@ -11,7 +11,7 @@ Rather than cramming parallel work, research, and implementation into the main a
   - **single** — one `{ agent, task }`.
   - **parallel** — an array of `tasks`, run concurrently up to **4** at once (max **8** tasks total, `types.ts`).
 - **Agent discovery.** Agents are loaded from your user agent directory and the project's agent directory (see [Configuration](#configuration)). The names available at startup are listed in the `subagent` tool description — project agents first — so the model has valid names to copy instead of inventing them (see [Limits](#limits)).
-- **Execution profiles.** Each task can name a profile that controls the subagent's model and thinking level (see [Configuration](#configuration)).
+- **Execution profiles.** Every task names a profile that controls the subagent's model and thinking level (see [Configuration](#configuration)). The built-in `current` profile runs the subagent with the session's current model and thinking.
 - **Structured output + TUI rendering.** Results stream back as JSON and are rendered in the terminal, with usage/stats (tokens, cost, turns) and collapsed/expanded item views.
 
 ## Requirements
@@ -79,7 +79,7 @@ The tool parameter schema lives in `index.ts` (`SubagentParams`). Pass exactly *
 }
 ```
 
-**Other optional params** (per task or call): `cwd` (working directory for the subprocess), `profile` (execution profile name), `agentScope` (`both` | `user` | `project`), and `confirmProjectAgents` (default `true`).
+**Other params** (per task or call): `profile` (**compulsory** — execution profile name; single mode: top-level, parallel mode: per task), `cwd` (working directory for the subprocess), `agentScope` (`both` | `user` | `project`), and `confirmProjectAgents` (default `true`).
 
 ### Agents
 
@@ -141,12 +141,16 @@ The extension is disabled by default. Enable it by setting `subagent.enableProfi
 
 The `subagent` tool is not registered when `enableProfiles` is missing, `false`, or any value other than the boolean `true`. Named **execution profiles** can be defined under `subagent.profiles` globally and optionally per-project in `.pi/settings.json` (project profiles win name conflicts, gated on project trust). Each profile sets `model` and/or `thinking`, where `thinking` is one of `off | minimal | low | medium | high | xhigh | max`.
 
-A task selects one via its `profile` param. Resolution/fallback per task (`profiles.ts` / `dispatch.ts`):
+A task selects one via its `profile` param, which is **compulsory**: single-mode calls must pass a top-level `profile`, and every entry in `tasks` must carry its own `profile`. Omitting it (or passing an empty string) is a hard error that lists the valid names.
 
-- **model** = `profile.model` → else agent frontmatter `model` → else the main agent's current model → else *(no `--model` flag)*.
-- **thinking** = `profile.thinking` → else (if the agent has no own model) the main agent's thinking level → else *(no `--thinking` flag)*.
+A built-in profile **`current`** is always available (even with no custom profiles defined): it runs the subagent with the **parent session's current model and thinking level**, pinned at spawn time — it overrides the agent definition's own `model`. A user-defined profile named `current` takes precedence over the built-in.
 
-Passing an **unknown** profile name is a hard error that lists the valid names; omitting `profile` never errors and just falls back.
+Resolution/fallback per task (`profiles.ts` / `dispatch.ts`):
+
+- **model** = `profile.model` (for `current`: the main agent's current model) → else agent frontmatter `model` → else the main agent's current model → else *(no `--model` flag)*.
+- **thinking** = `profile.thinking` (for `current`: the main agent's current thinking) → else (if the agent has no own model) the main agent's thinking level → else *(no `--thinking` flag)*.
+
+Passing an **unknown** profile name is a hard error that lists the valid names (always including `current`).
 
 ### Herdr mode (opt-in)
 

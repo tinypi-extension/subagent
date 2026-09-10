@@ -39,11 +39,13 @@ export function buildAdvertContext(): ToolAdvert {
 	const profilesEnabled = isProfilesEnabled(globalSettingsPath);
 	const registeredGlobalProfiles = profilesEnabled ? loadProfilesFrom(globalSettingsPath) : {};
 	const registeredProfileNames = Object.keys(registeredGlobalProfiles);
+	// formatProfileSummary always leads with the built-in "current" profile, so the
+	// advertised list is never empty even with no custom profiles defined.
 	const registeredProfileSummary = formatProfileSummary(registeredGlobalProfiles);
 	const profileHint =
 		registeredProfileNames.length === 0
-			? "No subagent profiles are defined, so omit the profile parameter and let the agent use its own model/settings."
-			: `Currently available profile(s): ${registeredProfileSummary}. Pick one by name; also check project-level .pi/settings.json for any additional/overriding profiles.`;
+			? `Compulsory. The built-in "current" (this session's current model+thinking) is the only profile defined so far; project-level .pi/settings.json may add more.`
+			: `Compulsory. Currently available profile(s): ${registeredProfileSummary}. Pick one by name; also check project-level .pi/settings.json for any additional/overriding profiles.`;
 
 	// Bake the agent names that exist at load time into the tool description and the
 	// top-level `agent` hint, so the model has legal names to copy instead of inventing

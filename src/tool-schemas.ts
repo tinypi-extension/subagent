@@ -44,7 +44,7 @@ export function buildSubagentParamSchemas(variant: ToolVariant, advert: ToolAdve
 		agent: Type.String({ description: "Name of the agent to invoke" }),
 		task: Type.String({ description: "Task to delegate to the agent" }),
 		cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-		profile: Type.Optional(Type.String({ description: `Execution profile (model+thinking). ${advert.profileHint}` })),
+		profile: Type.String({ description: `Execution profile (model+thinking) for this task; compulsory. ${advert.profileHint}` }),
 	});
 
 	const shared = {
@@ -63,7 +63,10 @@ export function buildSubagentParamSchemas(variant: ToolVariant, advert: ToolAdve
 					: "Array of {agent, task} for parallel execution",
 			}),
 		),
-		profile: Type.Optional(Type.String({ description: `Execution profile for this single task. ${advert.profileHint}` })),
+		// Compulsory in single mode; declared optional at the schema level because
+		// parallel mode carries the profile per task item and must not be forced to
+		// pass a meaningless top-level value. Enforced at runtime in both branches.
+		profile: Type.Optional(Type.String({ description: `Execution profile for this single task; compulsory in single mode (agent + task). ${advert.profileHint}` })),
 		agentScope: Type.Optional(AgentScopeSchema),
 		confirmProjectAgents: Type.Optional(
 			Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),

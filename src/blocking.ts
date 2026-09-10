@@ -9,12 +9,20 @@ import { CONFIG_DIR_NAME, getAgentDir, type ExtensionAPI } from "@earendil-works
 import type { ToolAdvert } from "./advert.ts";
 import { buildSubagentParamSchemas } from "./tool-schemas.ts";
 import { type AgentScope, discoverAgents } from "./agents.ts";
+import { type SubagentProfile, availableProfileNames } from "./profiles.ts";
 import { executeDispatch, type DispatchParams } from "./dispatch.ts";
 import { renderCall, renderResult, type Theme } from "./render.ts";
 import { registerSteerRenderers } from "./herdr-tools/renderers.ts";
 
 export function registerBlockingTool(pi: ExtensionAPI, advert: ToolAdvert): void {
 	const { registeredProfileNames, registeredProfileSummary, availableAgentsSentence } = advert;
+	// Global settings profiles baked at load time (advert inputs), rebuilt as a
+	// map so availableProfileNames can list them with the built-in "current" first.
+	const registeredProfilesAsMap = (): Record<string, SubagentProfile> => {
+		const out: Record<string, SubagentProfile> = {};
+		for (const name of registeredProfileNames) out[name] = {};
+		return out;
+	};
 
 	const { params: SubagentParams } = buildSubagentParamSchemas("blocking", advert);
 
@@ -27,17 +35,14 @@ export function registerBlockingTool(pi: ExtensionAPI, advert: ToolAdvert): void
 			`Default agent scope is "both" (recommended): user agents from ${path.join(getAgentDir(), "agents")} plus project-local agents from ${CONFIG_DIR_NAME}/agents (project agents win name conflicts).`,
 			`Other options is "user" and "project"`,
 			availableAgentsSentence,
-			`Profiles: ${registeredProfileSummary}. ${registeredProfileNames.length > 0
-				? "Pass one of these names per task to control the subagent's model and thinking; omit to use the agent's own model/settings."
-				: "Omit the profile parameter and let the agent use its own model/settings."
-			}`,
+			`The profile parameter is compulsory — every subagent must name an execution profile (single mode: top-level profile; parallel mode: per task). Profiles: ${registeredProfileSummary}.`,
 		].join(" "),
 		promptGuidelines: (() => {
 			const pick = (() => {
 				if (registeredProfileNames.length === 0) {
-					return "No subagent profiles are defined, so do not pass a profile parameter; each subagent uses its own model/settings.";
+					return "The profile parameter is compulsory; pass profile 'current' to run a subagent with this session's current model+thinking (project-level .pi/settings.json may define more profiles).";
 				}
-				return `Available subagent profile(s): ${registeredProfileSummary}. Check and evaluate the task (priority), pick one by name (${registeredProfileNames.join("/")}); omit profile to let the agent use its own model/settings.`;
+				return `The profile parameter is compulsory. Available subagent profile(s): ${registeredProfileSummary}. Check and evaluate the task (priority) and pick one by name (${availableProfileNames(registeredProfilesAsMap()).join("/")}); 'current' runs with this session's current model+thinking.`;
 			})();
 			return [
 				pick,

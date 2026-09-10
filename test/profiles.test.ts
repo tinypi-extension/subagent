@@ -9,6 +9,9 @@ import {
   loadProfilesIfEnabled,
   resolveProfile,
   validateProfiles,
+  lookupProfile,
+  availableProfileNames,
+  profileRequiredMessage,
   formatProfileSummary,
   isProfilesEnabled,
   type SubagentProfile,
@@ -89,15 +92,20 @@ test("resolveProfile full chain: profile -> agent -> parent", () => {
   assert.deepEqual(resolveProfile(undefined, undefined, {}), {});
 });
 
-test("formatProfileSummary renders readable list and empty fallback", () => {
-  assert.equal(formatProfileSummary({}), "no profiles defined");
+test("formatProfileSummary always advertises the built-in current profile", () => {
+  assert.equal(formatProfileSummary({}), "current (model+thinking = this session's current values)");
   assert.equal(
     formatProfileSummary({
       low: { model: "a/x", thinking: "off" },
       high: { thinking: "medium" },
       bare: {},
     }),
-    "low (model=a/x, thinking=off), high (thinking=medium), bare",
+    "current (model+thinking = this session's current values), low (model=a/x, thinking=off), high (thinking=medium), bare",
+  );
+  // A user-defined "current" replaces the built-in line.
+  assert.equal(
+    formatProfileSummary({ current: { model: "u/m" } }),
+    "current (model=u/m)",
   );
 });
 
@@ -114,4 +122,46 @@ test("validateProfiles rejects prototype-chain names that are not own keys", () 
   // but an own key with a prototype-ish name still validates
   const available: Record<string, SubagentProfile> = { toString: {} };
   assert.deepEqual(validateProfiles(["toString"], available), []);
+});
+
+test('built-in "current" profile validates even with no profiles defined', () => {
+  assert.deepEqual(validateProfiles(["current"], {}), []);
+  assert.deepEqual(validateProfiles(["current"], { low: {} }), []);
+});
+
+test("lookupProfile resolves the built-in current to the parent's live model+thinking", () => {
+  const parent = { model: "p/react", thinkingLevel: "medium" as const };
+  assert.deepEqual(lookupProfile(undefined, {}, parent), undefined);
+  assert.deepEqual(lookupProfile("current", {}, parent), { model: "p/react", thinking: "medium" });
+  // built-in current beats the agent definition in resolveProfile
+  assert.deepEqual(resolveProfile(lookupProfile("current", {}, parent), { model: "agent/m" }, parent), {
+    model: "p/react",
+    thinkingLevel: "medium",
+  });
+  // a user-defined "current" wins over the built-in
+  const custom: Record<string, SubagentProfile> = { current: { model: "c/m", thinking: "off" } };
+  assert.deepEqual(lookupProfile("current", custom, parent), { model: "c/m", thinking: "off" });
+});
+
+test("availableProfileNames and profileRequiredMessage include the built-in current", () => {
+  assert.deepEqual(availableProfileNames({}), ["current"]);
+  assert.deepEqual(availableProfileNames({ low: {}, high: {} }), ["current", "low", "high"]);
+  assert.deepEqual(availableProfileNames({ current: {}, low: {} }), ["current", "low"]);
+  const msg = profileRequiredMessage({ low: {} });
+  assert.ok(msg.includes("compulsory"));
+  assert.ok(msg.includes('"current"'));
+  assert.ok(msg.includes("low"));
+});
+
+test("profile names are trimmed before validation and lookup", () => {
+  const available: Record<string, SubagentProfile> = { low: { model: "p/low", thinking: "off" } };
+  assert.deepEqual(validateProfiles([" low ", " current "], available), [], "padded names are valid");
+  assert.deepEqual(validateProfiles(["   "], available), [], "blank names defer to the compulsory check");
+  assert.deepEqual(validateProfiles([" bogus "], available), ["bogus"], "error text reports the trimmed name");
+  assert.deepEqual(lookupProfile(" low ", available, {}), { model: "p/low", thinking: "off" });
+  assert.deepEqual(lookupProfile("current  ", available, { model: "p/react", thinkingLevel: "high" }), { model: "p/react", thinking: "high" });
+  assert.equal(lookupProfile("  ", available, {}), undefined);
+  // defense-in-depth: prototype-chain names never resolve even if validation is skipped
+  assert.equal(lookupProfile("constructor", available, {}), undefined);
+  assert.equal(lookupProfile("toString", available, {}), undefined);
 });

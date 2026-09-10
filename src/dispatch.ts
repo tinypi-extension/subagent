@@ -7,7 +7,10 @@
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { AgentConfig, AgentDiscoveryResult } from "./agents.ts";
 import {
+	availableProfileNames,
 	loadProfilesIfEnabled,
+	lookupProfile,
+	profileRequiredMessage,
 	resolveProfile,
 	validateProfiles,
 	type SubagentProfile,
@@ -59,7 +62,7 @@ export async function executeDispatch(
 
 	const resolveFor = (agentName: string | undefined, profileName: string | undefined): DispatchDefaults => {
 		const agentConfig = agentName ? agents.find((a) => a.name === agentName) : undefined;
-		return resolveProfile(profileName ? profiles[profileName] : undefined, agentConfig, parentDefaults);
+		return resolveProfile(lookupProfile(profileName, profiles, parentDefaults), agentConfig, parentDefaults);
 	};
 
 	const hasTasks = (params.tasks?.length ?? 0) > 0;
@@ -79,18 +82,10 @@ export async function executeDispatch(
 	if (params.tasks) for (const t of params.tasks) requestedProfiles.push(t.profile);
 	requestedProfiles.push(params.profile);
 	const invalid = validateProfiles(requestedProfiles, profiles);
-	if (invalid.length > 0) {
-		const validNames = Object.keys(profiles).join(", ") || "none";
-		return {
-			content: [{
-				type: "text",
-				text: `Unknown subagent profile(s): ${invalid.join(", ")}. Available profiles: ${validNames}.`,
-			}],
-			details: makeDetails("single")([]),
-			isError: true,
-		} as AgentToolResult<SubagentDetails>;
-	}
 
+	// Mode is validated first, matching the herdr branch's ordering, so a
+	// malformed call always gets the same "exactly one mode" error regardless
+	// of which other params are also wrong.
 	if (modeCount !== 1) {
 		const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 		return {
@@ -101,7 +96,38 @@ export async function executeDispatch(
 				},
 			],
 			details: makeDetails("single")([]),
-		};
+			isError: true,
+		} as AgentToolResult<SubagentDetails>;
+	}
+
+	if (invalid.length > 0) {
+		const validNames = availableProfileNames(profiles).join(", ");
+		return {
+			content: [{
+				type: "text",
+				text: `Unknown subagent profile(s): ${invalid.join(", ")}. Available profiles: ${validNames}.`,
+			}],
+			details: makeDetails("single")([]),
+			isError: true,
+		} as AgentToolResult<SubagentDetails>;
+	}
+
+	// The profile parameter is compulsory: single mode carries it at the top
+	// level, parallel mode on every task item (the schema requires it per task;
+	// this runtime check covers direct calls and empty strings).
+	if (hasSingle && !params.profile?.trim()) {
+		return {
+			content: [{ type: "text", text: profileRequiredMessage(profiles) }],
+			details: makeDetails("single")([]),
+			isError: true,
+		} as AgentToolResult<SubagentDetails>;
+	}
+	if (hasTasks && params.tasks!.some((t) => !t.profile?.trim())) {
+		return {
+			content: [{ type: "text", text: profileRequiredMessage(profiles) }],
+			details: makeDetails("parallel")([]),
+			isError: true,
+		} as AgentToolResult<SubagentDetails>;
 	}
 
 	if ((agentScope === "project" || agentScope === "both") && confirmProjectAgents && ctx.hasUI && !ctx.isProjectTrusted()) {
