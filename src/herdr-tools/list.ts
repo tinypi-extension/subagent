@@ -10,7 +10,7 @@ import { type AgentScope, discoverAgents } from "../agents.ts";
 import { AgentScopeSchema } from "../tool-schemas.ts";
 
 export const LIST_DESCRIPTION =
-	"List all available subagent definitions (names and source directory). " +
+	"List all available subagent definitions (names, descriptions and source directory). " +
 	"Backed by the same discovery as the subagent tool: user agents plus project-local agents " +
 	"(project agents win name conflicts). Honors the agentScope parameter.";
 

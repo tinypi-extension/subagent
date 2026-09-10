@@ -10,7 +10,7 @@ Rather than cramming parallel work, research, and implementation into the main a
 - **Two orchestration modes:**
   - **single** — one `{ agent, task }`.
   - **parallel** — an array of `tasks`, run concurrently up to **4** at once (max **8** tasks total, `types.ts`).
-- **Agent discovery.** Agents are loaded from your user agent directory and the project's agent directory (see [Configuration](#configuration)). The names available at startup are listed in the `subagent` tool description — project agents first — so the model has valid names to copy instead of inventing them (see [Limits](#limits)).
+- **Agent discovery.** Agents are loaded from your user agent directory and the project's agent directory (see [Configuration](#configuration)). The names *and one-line descriptions* available at startup are listed in the `subagent` tool description — project agents first — so the model has valid names to copy and can route a task by role instead of guessing (see [Limits](#limits)).
 - **Execution profiles.** Every task names a profile that controls the subagent's model and thinking level (see [Configuration](#configuration)). The built-in `current` profile runs the subagent with the session's current model and thinking.
 - **Structured output + TUI rendering.** Results stream back as JSON and are rendered in the terminal, with usage/stats (tokens, cost, turns) and collapsed/expanded item views.
 
@@ -100,7 +100,7 @@ The `name` and `description` are required; `tools` restricts which tools the sub
 
 Tool lists (`tools:` frontmatter, `deny-tools:` frontmatter, and the `tools` param on the `subagent` call) accept `*` globs, so you don't have to enumerate every exact name: `tools: read, bash, codegraph_*` allows any tool whose name starts with `codegraph_` (the `*` matches anywhere — `*_files` and `mcp_*` work too). A token is a pattern only when it contains `*`; plain names keep matching exactly. Patterns expand against the tools registered at spawn time (built-in, extension, and MCP tools). A pattern that matches nothing is passed through literally and reported as a warning in the spawn result — never silently dropped.
 
-Only the `name` is advertised to the model, along with whether it came from the user or project directory. The `description` is required for an agent file to load, but it is not sent anywhere: it neither reaches the subagent — whose system prompt is the markdown body below the closing `---` — nor is it used to pick between agents. Add agent files, then `/reload` (or restart pi) for their names to appear in the tool description.
+The `subagent` tool description advertises each agent as `name (source) — description`, so the model chooses by role rather than by name alone. The `agent` parameter hint lists the legal names only — the prose appears once, not twice. The description is otherwise not sent anywhere: it never reaches the subagent, whose system prompt is the markdown body below the closing `---`. Add agent files, then `/reload` (or restart pi) for them to appear. Keep `description:` a short one-liner: it is re-sent on every prompt turn, so the advertised copy is collapsed to one line and capped at 120 chars (`MAX_AGENT_DESC_CHARS`, `types.ts`).
 
 An agent file whose frontmatter cannot be parsed is skipped silently, along with any file missing `name` or a string `description`; it disappears from discovery rather than being reported. If an agent seems to be missing, check its frontmatter — a colon-introduced value such as `description: [ …` starts a YAML flow sequence and must be quoted.
 
@@ -173,7 +173,7 @@ Both conditions must hold: the herdr environment **and** `subagent.herdr === tru
 - Parallel: max **8** tasks, **4** concurrent.
 - Per-task output in parallel results is capped (~**50KB**); full output is preserved in the tool details (`format.ts`).
 - TUI rendering collapses item lists after **10** items (`types.ts`).
-- Agent names advertised in the tool description: max **12** listed (`MAX_LISTED_AGENTS`, `types.ts`), project agents first, the rest collapsed to `+K more`. Snapshot taken when the extension loads, from the directory pi was launched in — new or removed agents need a `/reload`. Calling an unknown name is not fatal: it returns the full current list.
+- Agents advertised in the tool description: max **12** listed (`MAX_LISTED_AGENTS`, `types.ts`), project agents first, the rest collapsed to `+K more`; each entry's `description` is clamped to **120** chars on one line (`MAX_AGENT_DESC_CHARS`). Snapshot taken when the extension loads, from the directory pi was launched in — new or removed agents need a `/reload`. Calling an unknown name is not fatal: it returns the full current list.
 
 ## Development / testing
 

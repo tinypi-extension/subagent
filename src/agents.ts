@@ -166,29 +166,83 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 const SOURCE_RANK: Record<AgentConfig["source"], number> = { project: 0, user: 1 };
 
 /**
- * Render agent names for the tool description and the top-level `agent` param hint.
- *
- * Deliberately names only. An agent's `description` is long prose, and repeating one per
- * name on every prompt turn buys routing quality this feature does not claim — its goal
- * is giving the model legal values to copy. See
- * docs/superpowers/specs/2026-08-31-subagent-agent-names-in-description-design.md.
- *
- * `text` holds up to `maxItems` entries as `name (source)`, project-first and
- * alphabetical within each source; `remaining` is how many were dropped, so the caller
- * can append `+K more`. A dropped name still self-corrects: `run.ts` answers an unknown
- * agent with the full current list.
- *
- * Pure and total: returns `""` (not `"none"`) when there is nothing to list, so the
- * caller picks the empty-case wording, and never mutates `agents`.
+ * Order used by both advertised lists: project agents first, then user agents,
+ * alphabetical inside each group. `maxItems` truncates from the tail, so repo-specific
+ * names always keep their slots when a large global library has to be collapsed.
  */
-export function formatAgentNames(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
+function selectAdvertisedAgents(
+	agents: AgentConfig[],
+	maxItems: number,
+): { listed: AgentConfig[]; remaining: number } {
 	const sorted = [...agents].sort((a, b) => {
 		const bySource = SOURCE_RANK[a.source] - SOURCE_RANK[b.source];
 		return bySource !== 0 ? bySource : a.name.localeCompare(b.name);
 	});
 	const listed = sorted.slice(0, Math.max(0, maxItems));
+	return { listed, remaining: sorted.length - listed.length };
+}
+
+/**
+ * Render agent names for the `agent` param hint and per-call error messages.
+ *
+ * Names only: a parameter schema needs legal values to copy, and repeating prose
+ * there is a second copy of what the tool description already says. For the routing
+ * text the description carries, see `formatAgentRoster`.
+ *
+ * `text` holds up to `maxItems` entries as `name (source)`; `remaining` is how many
+ * were dropped, so the caller can append `+K more`. A dropped name still self-corrects:
+ * `run.ts` answers an unknown agent with the full current list.
+ *
+ * Pure and total: returns `""` (not `"none"`) when there is nothing to list, so the
+ * caller picks the empty-case wording, and never mutates `agents`.
+ */
+export function formatAgentNames(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
+	const { listed, remaining } = selectAdvertisedAgents(agents, maxItems);
 	return {
 		text: listed.map((a) => `${a.name} (${a.source})`).join(", "),
-		remaining: sorted.length - listed.length,
+		remaining,
+	};
+}
+
+/**
+ * Collapse a frontmatter description onto one bounded line for prompt text.
+ *
+ * YAML lets `description:` be a block scalar or a long paragraph; an agent file
+ * must not be able to inflate every prompt turn, so whitespace runs become single
+ * spaces and over-length values get an ellipsis.
+ */
+function clampDescription(description: string, maxChars: number): string {
+	const oneLine = description.replace(/\s+/g, " ").trim();
+	if (oneLine.length <= maxChars) return oneLine;
+	return `${oneLine.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+/**
+ * Render the advertised roster: `name (source) — description`, project-first and
+ * alphabetical within each source, one entry per agent.
+ *
+ * The description is what lets the main agent pick by role instead of guessing from a
+ * bare name, so it goes in the tool description (see `advert.ts`). Same cap and same
+ * truncation order as `formatAgentNames`, and the same names, so the two lists cannot
+ * disagree about what exists.
+ *
+ * Pure and total: `""` when there is nothing to list, an entry degrades to a bare
+ * `name (source)` when its description is missing or blank, never mutates `agents`.
+ */
+export function formatAgentRoster(
+	agents: AgentConfig[],
+	maxItems: number,
+	maxDescChars: number,
+): { text: string; remaining: number } {
+	const { listed, remaining } = selectAdvertisedAgents(agents, maxItems);
+	return {
+		text: listed
+			.map((a) => {
+				const head = `${a.name} (${a.source})`;
+				const desc = clampDescription(a.description ?? "", maxDescChars);
+				return desc ? `${head} — ${desc}` : head;
+			})
+				.join("; "),
+			remaining,
 	};
 }

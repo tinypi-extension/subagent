@@ -12,6 +12,10 @@ export const MAX_CONCURRENCY = 4;
 // collapsing to "+K more". Comfortably above the agents shipped in agents/, so a
 // normal install lists every name, while a large library cannot grow the prompt.
 export const MAX_LISTED_AGENTS = 12;
+// How many characters of an agent's frontmatter `description` the advertised
+// roster keeps per entry. Descriptions are meant to be one-liners; the cap bounds
+// the cost of one that is not (for example a multi-line YAML scalar).
+export const MAX_AGENT_DESC_CHARS = 120;
 export const COLLAPSED_ITEM_COUNT = 10;
 export const PER_TASK_OUTPUT_CAP = 50 * 1024;
 

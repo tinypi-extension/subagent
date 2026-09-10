@@ -227,3 +227,35 @@ it.
   `ChainItem`, a third and fourth copy for identical information.
 - **Exclusive fallback rejected.** Showing *only* project agents when any exist would
   hide `planner`/`reviewer`/`scout`/`worker` and reinstate the invented-name failure.
+
+## Amendment (2026-08-31b): requirement 1 reversed — the description is advertised
+
+The owner asked for agent descriptions in the tool description, which is exactly what
+requirement 1 and the *Non-goals* ruled out. Reversal applied; the rest of this spec
+(project-first ordering, load-time snapshot, 12-item cap, self-healing unknown names)
+still holds.
+
+What changed:
+
+- `formatAgentRoster(agents, maxItems, maxDescChars)` (`agents.ts`) renders
+  `name (source) — description` joined by `"; "`, sharing `selectAdvertisedAgents` with
+  `formatAgentNames` so both lists cap and truncate identically and can never disagree.
+- `advert.ts` puts the **roster** in both branches' `Available agents:` sentence and
+  keeps **names only** in the `agent` param hint. Routing happens from the description;
+  the hint's job is legal values to copy, so repeating the prose there was rejected as a
+  second copy of the same tokens. `TaskItem.agent`/`ChainItem.agent` remain untouched.
+- `clampDescription` collapses whitespace runs to single spaces and truncates at
+  `MAX_AGENT_DESC_CHARS = 120` (`types.ts`) with an ellipsis. An agent file must not be
+  able to inflate every prompt turn via a multi-line YAML block scalar. A blank
+  description degrades to a bare `name (source)`; the separator is `"; "` because
+  descriptions contain commas.
+
+Wording: `Available agents, with what each is for: …` — the qualifier is what tells the
+model the entries are routing candidates, not just a name census.
+
+Token cost, measured on this machine (5 user agents, real frontmatter): the roster adds
+≈95 tokens per turn versus the names-only sentence in the description; the param hint is
+unchanged. Accepted as the price of the reversal.
+
+`formatAgentList` stays deleted (`docs/superpowers/plans/2026-08-31-subagent-agent-names-in-description.md`
+Task 1) — `formatAgentRoster` replaces its role with a cap and one-line clamping.
