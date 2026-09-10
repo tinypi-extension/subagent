@@ -277,6 +277,25 @@ describe("launch plan: pi argv", () => {
     assert.match(p.taskArtifactFile!, /context\/worker-.*\.md$/);
   });
 
+  it("expands `*` tool patterns in --tools against the parent's registry", () => {
+    const fx = makeFixture();
+    const p = plan(fx, { tools: "read,codegraph_*" }, null, {
+      availableTools: ["read", "codegraph_codegraph_files", "write"],
+    });
+    const toolsArg = p.piArgv[p.piArgv.indexOf("--tools") + 1];
+    assert.equal(toolsArg, "read,codegraph_codegraph_files,caller_ping,subagent_done");
+    assert.deepEqual(p.toolWarnings, []);
+  });
+
+  it("keeps an unmatched `*` pattern literal and reports a tool warning", () => {
+    const fx = makeFixture();
+    const p = plan(fx, { tools: "read,zzz_*" }, null, { availableTools: ["read"] });
+    const toolsArg = p.piArgv[p.piArgv.indexOf("--tools") + 1];
+    assert.ok(toolsArg.split(",").includes("zzz_*"), `literal passthrough expected in: ${toolsArg}`);
+    assert.equal(p.toolWarnings.length, 1);
+    assert.match(p.toolWarnings[0], /zzz_\*/);
+  });
+
   it("emits --model and --thinking as two separate argv entries", () => {
     const fx = makeFixture();
     const p = plan(fx, {}, { model: "anthropic/claude-x", thinking: "high" });
@@ -561,6 +580,27 @@ describe("ported helpers", () => {
     assert.equal(buildSubagentToolAllowlist(undefined), null);
     assert.equal(buildSubagentToolAllowlist(""), null);
     assert.equal(buildSubagentToolAllowlist(" , "), null);
+  });
+
+  it("buildSubagentToolAllowlist expands `*` patterns and dedupes overlaps", () => {
+    assert.equal(
+      buildSubagentToolAllowlist(
+        "read,bash,codegraph_*",
+        ["read", "bash", "codegraph_codegraph_files", "codegraph_codegraph_explore", "write"],
+      ),
+      "read,bash,codegraph_codegraph_files,codegraph_codegraph_explore,caller_ping,subagent_done",
+    );
+    assert.equal(
+      buildSubagentToolAllowlist("read,re*", ["read"]),
+      "read,caller_ping,subagent_done",
+    );
+  });
+
+  it("buildSubagentToolAllowlist keeps unmatched patterns literal", () => {
+    assert.equal(
+      buildSubagentToolAllowlist("read,foo_*", ["read"]),
+      "read,foo_*,caller_ping,subagent_done",
+    );
   });
 
   it("buildPiPromptArgs emits the system prompt as --system-prompt + $(cat …) substitution", () => {

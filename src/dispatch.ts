@@ -189,11 +189,12 @@ export async function executeDispatch(
 				: "completed";
 			return `### [${r.agent}] ${status}\n\n${output}`;
 		});
+		const warnings = results.flatMap((r) => r.warnings ?? []);
 		return {
 			content: [
 				{
 					type: "text",
-					text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`,
+					text: `${warnings.length > 0 ? warnings.join("\n") + "\n\n" : ""}Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`,
 				},
 			],
 			details: makeDetails("parallel")(results),
@@ -214,16 +215,17 @@ export async function executeDispatch(
 			makeDetails("single"),
 		);
 		const isError = isFailedResult(result);
+		const warningPrefix = result.warnings?.length ? `${result.warnings.join("\n")}\n\n` : "";
 		if (isError) {
 			const errorMsg = getResultOutput(result);
 			return {
-				content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
+				content: [{ type: "text", text: `${warningPrefix}Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
 				details: makeDetails("single")([result]),
 				isError: true,
 			} as AgentToolResult<SubagentDetails>;
 		}
 		return {
-			content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+			content: [{ type: "text", text: `${warningPrefix}${getFinalOutput(result.messages) || "(no output)"}` }],
 			details: makeDetails("single")([result]),
 		};
 	}

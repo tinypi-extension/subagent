@@ -81,7 +81,12 @@ export function buildSubagentParamSchemas(variant: ToolVariant, advert: ToolAdve
 				Type.String({ description: "Display name for the subagent (single mode). Default: the agent's name, or 'Subagent'." }),
 			),
 			model: Type.Optional(Type.String({ description: "Model override (overrides agent default)" })),
-			tools: Type.Optional(Type.String({ description: "Comma-separated tools (overrides agent default)" })),
+			tools: Type.Optional(
+				Type.String({
+					description:
+						"Comma-separated tool names, `*` globs allowed (e.g. read,bash,codegraph_*) (overrides agent default)",
+				}),
+			),
 			systemPrompt: Type.Optional(
 				Type.String({ description: "Role instructions appended to the system prompt (used when the agent has no definition body)" }),
 			),

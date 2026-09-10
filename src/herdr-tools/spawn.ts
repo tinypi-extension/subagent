@@ -63,6 +63,8 @@ interface SpawnedAck {
 	paneId: string;
 	/** Profile name requested for this spawn (model+thinking override); absent when none. */
 	profile?: string;
+	/** Tool-list warnings from launch planning (e.g. a `*` pattern that matched nothing). */
+	toolWarnings?: string[];
 	sessionFile: string;
 	launchScriptFile: string;
 }
@@ -139,6 +141,7 @@ async function spawnOneSubagent(
 			paneId: running.paneId,
 			sessionFile: running.sessionFile,
 			launchScriptFile: running.launchScriptFile,
+			...(plan.toolWarnings.length > 0 ? { toolWarnings: plan.toolWarnings } : {}),
 		},
 	};
 }
@@ -362,6 +365,7 @@ async function executeSubagentSpawn(
 	const lines = [
 		...spawned.map((s) => `spawned ${s.name} (pane ${s.paneId})${s.profile ? ` [${s.profile}]` : ""}`),
 		...failed.map((f) => `failed ${f.agent}: ${f.error}`),
+		...spawned.flatMap((s) => s.toolWarnings ?? []),
 	];
 	return {
 		content: [{ type: "text" as const, text: `${lines.join("\n")}\n\n${FIRE_AND_FORGET_NOTE}` }],

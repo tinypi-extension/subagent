@@ -43,6 +43,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { buildAdvertContext } from "./src/advert.ts";
 import { registerBlockingTool } from "./src/blocking.ts";
+import { setToolNameSource } from "./src/tool-patterns.ts";
 import { isHerdrEnabled, isInsideHerdr } from "./src/herdr-tools/guard.ts";
 import { registerHerdrBranch } from "./src/herdr-tools/registration.ts";
 import { resolveInterruptTarget } from "./src/herdr-tools/interrupt.ts";
@@ -64,6 +65,12 @@ runtime.setModulePath(MODULE_PATH);
 const advert = buildAdvertContext();
 
 export default function (pi: ExtensionAPI) {
+	// Tool-name source for `*` pattern expansion in tool lists (codegraph_*).
+	// Lazy by design: expansion runs at spawn time, when the registry (built-in
+	// + extension + MCP tools) is complete. Re-assigned on every import, so a
+	// /reload re-points it at the fresh pi handle.
+	setToolNameSource(() => pi.getAllTools().map((tool) => tool.name));
+
 	// Herdr branch requires BOTH the herdr environment (panes to launch into)
 	// AND the explicit opt-in (`"subagent": { "herdr": true }` in settings.json).
 	// Anything else falls back to the blocking tool.

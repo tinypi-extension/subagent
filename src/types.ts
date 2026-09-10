@@ -37,6 +37,8 @@ export interface SingleResult {
 	profile?: string;
 	stopReason?: string;
 	errorMessage?: string;
+	/** Tool-list warnings (e.g. a `*` pattern that matched no tools). */
+	warnings?: string[];
 }
 
 export interface SubagentDetails {

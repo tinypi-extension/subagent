@@ -11,6 +11,7 @@ import type { Message } from "@earendil-works/pi-ai";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig } from "./agents.ts";
 import { getFinalOutput } from "./format.ts";
+import { expandToolPatterns, getToolNames, unmatchedWarningText } from "./tool-patterns.ts";
 import type { DispatchDefaults, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.ts";
 
 export async function mapWithConcurrencyLimit<TIn, TOut>(
@@ -120,7 +121,15 @@ export async function runSingleAgent(
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 	if (dispatchDefaults.model) args.push("--model", dispatchDefaults.model);
 	if (dispatchDefaults.thinkingLevel) args.push("--thinking", dispatchDefaults.thinkingLevel);
-	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	// `*` patterns in the frontmatter tools list (e.g. codegraph_*) expand
+	// against the parent's registry; pi core's --tools is exact-name only.
+	// Unmatched patterns pass through literally with a warning.
+	let toolWarnings: string[] = [];
+	if (agent.tools && agent.tools.length > 0) {
+		const { expanded, unmatched } = expandToolPatterns(agent.tools, getToolNames());
+		toolWarnings = unmatched.map(unmatchedWarningText);
+		args.push("--tools", expanded.join(","));
+	}
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
@@ -135,6 +144,7 @@ export async function runSingleAgent(
 		usage: emptyUsage(),
 		model: dispatchDefaults.model,
 		profile: profileName,
+		warnings: toolWarnings.length > 0 ? toolWarnings : undefined,
 	};
 
 	const emitUpdate = () => {

@@ -427,6 +427,29 @@ describe("herdr branch registration", () => {
 		const names = tools.map((t) => t.name).sort();
 		assert.deepEqual(names, ["subagent", "subagents_list"]);
 	});
+
+	it("honors `*` glob patterns in PI_DENY_TOOLS", () => {
+		const fixture = makeFixture();
+		makeHerdrEnv(fixture);
+		// `subagent_*` denies the underscore-suffixed siblings but NOT `subagent`
+		// itself, and `mcp_*` matches nothing among our candidates without error.
+		setEnv("PI_DENY_TOOLS", "subagent_*,mcp_*");
+		const { pi, tools } = makeFakePi();
+		registerExtension(pi);
+
+		const names = tools.map((t) => t.name).sort();
+		assert.deepEqual(names, ["subagent", "subagents_list"]);
+	});
+
+	it("`*` alone in PI_DENY_TOOLS denies every gated tool", () => {
+		const fixture = makeFixture();
+		makeHerdrEnv(fixture);
+		setEnv("PI_DENY_TOOLS", "*");
+		const { pi, tools } = makeFakePi();
+		registerExtension(pi);
+
+		assert.deepEqual(tools.map((t) => t.name), []);
+	});
 });
 
 // ── herdr subagent spawn ────────────────────────────────────────────────────

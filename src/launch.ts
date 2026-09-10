@@ -61,6 +61,13 @@ import {
   resolveLaunchBehaviorStandalone,
   resolveSubagentPaths,
 } from "./agent-defs.ts";
+import {
+  expandToolPatterns,
+  getToolNames,
+  parseToolEntries,
+  unmatchedToolPatterns,
+  unmatchedWarningText,
+} from "./tool-patterns.ts";
 
 /** `subagent` tool params consulted by launch planning. */
 export interface SubagentLaunchParams {
@@ -93,6 +100,8 @@ export interface LaunchPlanContext {
   resolvePiBin?: (env: Record<string, string | undefined>) => string;
   /** Override the child extension path (default: <package root>/subagent-done.ts). */
   subagentDonePath?: string;
+  /** Tool names to expand `*` patterns against (default: the parent's live registry). */
+  availableTools?: string[];
 }
 
 export interface LaunchPlan {
@@ -109,6 +118,8 @@ export interface LaunchPlan {
   syspromptFile: string | null;
   /** Files the executor must write (mkdir -p dirname first). Includes the launch script. */
   files: Array<{ path: string; content: string }>;
+  /** Warnings from tool-list processing (e.g. a `*` pattern that matched nothing). */
+  toolWarnings: string[];
   /** Arguments for HerdrClient.paneStart(). */
   paneStart: {
     name: string;
@@ -146,15 +157,21 @@ const SUBAGENT_CONTROL_TOOLS = ["caller_ping", "subagent_done"] as const;
  * control tools from subagent-done.ts would otherwise be hidden, leaving a
  * manually resumed or user-touched subagent unable to call subagent_done.
  */
-export function buildSubagentToolAllowlist(effectiveTools?: string): string | null {
-  const requested = (effectiveTools ?? "")
-    .split(",")
-    .map((tool) => tool.trim())
-    .filter(Boolean);
+export function buildSubagentToolAllowlist(
+  effectiveTools?: string,
+  availableTools?: string[],
+): string | null {
+  const requested = parseToolEntries(effectiveTools);
 
   if (requested.length === 0) return null;
 
-  const allow = new Set(requested);
+  // Expand `*` patterns (e.g. `codegraph_*`) against the parent's tool names:
+  // pi core's --tools is an exact-name allowlist, so patterns must be resolved
+  // before the child argv is built. Unmatched patterns stay literal (see
+  // warning collection in buildLaunchPlan).
+  const { expanded } = expandToolPatterns(requested, availableTools ?? getToolNames());
+
+  const allow = new Set(expanded);
   for (const tool of SUBAGENT_CONTROL_TOOLS) {
     allow.add(tool);
   }
@@ -435,10 +452,17 @@ export function buildLaunchPlan(
     files.push({ path: syspromptFile, content: identity });
   }
 
-  const toolAllowlist = buildSubagentToolAllowlist(effectiveTools);
+  const toolAllowlist = buildSubagentToolAllowlist(effectiveTools, ctx.availableTools);
   if (toolAllowlist) {
     piArgv.push("--tools", toolAllowlist);
   }
+
+  // Patterns that matched nothing still go through literally (the child just
+  // sees an unknown name); surface them instead of failing the launch.
+  const toolWarnings = unmatchedToolPatterns(
+    parseToolEntries(effectiveTools),
+    ctx.availableTools ?? getToolNames(),
+  ).map(unmatchedWarningText);
 
   // Task delivery: always artifact-backed — the child's initial message is
   // the `@<taskfile>` reference, with wrapper instructions in the file.
@@ -509,6 +533,7 @@ export function buildLaunchPlan(
     taskArtifactFile,
     syspromptFile,
     files,
+    toolWarnings,
     paneStart: {
       name: params.name,
       cwd: targetCwd,

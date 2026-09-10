@@ -89,7 +89,7 @@ Agent aliases such as `scout`, `planner`, `worker`, and `reviewer` are **not** h
 ---
 name: scout
 description: Fast codebase recon that returns compressed context for handoff to other agents
-tools: read, grep, find, ls, bash, codegraph_codegraph_explore
+tools: read, grep, find, ls, bash, codegraph_*
 ---
 
 You are a scout. Quickly investigate a codebase and return structured findings that
@@ -97,6 +97,8 @@ another agent can use without re-reading everything.
 ```
 
 The `name` and `description` are required; `tools` restricts which tools the subagent gets; `model` (optional) sets the subagent's model.
+
+Tool lists (`tools:` frontmatter, `deny-tools:` frontmatter, and the `tools` param on the `subagent` call) accept `*` globs, so you don't have to enumerate every exact name: `tools: read, bash, codegraph_*` allows any tool whose name starts with `codegraph_` (the `*` matches anywhere — `*_files` and `mcp_*` work too). A token is a pattern only when it contains `*`; plain names keep matching exactly. Patterns expand against the tools registered at spawn time (built-in, extension, and MCP tools). A pattern that matches nothing is passed through literally and reported as a warning in the spawn result — never silently dropped.
 
 Only the `name` is advertised to the model, along with whether it came from the user or project directory. The `description` is required for an agent file to load, but it is not sent anywhere: it neither reaches the subagent — whose system prompt is the markdown body below the closing `---` — nor is it used to pick between agents. Add agent files, then `/reload` (or restart pi) for their names to appear in the tool description.
 

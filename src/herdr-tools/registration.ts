@@ -6,6 +6,7 @@ import { realpathSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ToolAdvert } from "../advert.ts";
 import { markSubagentInactive } from "../runtime-state.ts";
+import { toolPatternMatches, unmatchedToolPatterns } from "../tool-patterns.ts";
 import { registerSubagentTool } from "./spawn.ts";
 import { registerResumeTool } from "./resume.ts";
 import { registerInterruptTool } from "./interrupt.ts";
@@ -22,13 +23,13 @@ import {
 export function registerHerdrBranch(pi: ExtensionAPI, advert: ToolAdvert): void {
 	// Tools denied via PI_DENY_TOOLS env var (set by the parent agent based on
 	// frontmatter when this process itself was spawned as a subagent).
-	const deniedTools = new Set(
-		(process.env.PI_DENY_TOOLS ?? "")
-			.split(",")
-			.map((s) => s.trim())
-			.filter(Boolean),
-	);
-	const shouldRegister = (name: string) => !deniedTools.has(name);
+	// Entries may be globs (`subagent_*`): each candidate name is matched
+	// against every entry at registration time, so no name source is needed.
+	const deniedEntries = (process.env.PI_DENY_TOOLS ?? "")
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	const shouldRegister = (name: string) => !deniedEntries.some((entry) => toolPatternMatches(name, entry));
 
 	if (shouldRegister("subagent")) registerSubagentTool(pi, advert);
 	if (shouldRegister("subagent_resume")) registerResumeTool(pi);
@@ -36,6 +37,21 @@ export function registerHerdrBranch(pi: ExtensionAPI, advert: ToolAdvert): void 
 	if (shouldRegister("subagents_list")) registerListTool(pi);
 
 	pi.on("session_start", (_event, ctx) => {
+		// Deny patterns are matched at registration against our known candidate
+		// names; a pattern matching NOTHING in the full child registry is still
+		// worth surfacing (typo, renamed server). session_start is the first
+		// point where getAllTools() reflects every extension's tools.
+		const unmatchedDeny = unmatchedToolPatterns(
+			deniedEntries,
+			pi.getAllTools().map((tool) => tool.name),
+		);
+		if (unmatchedDeny.length > 0) {
+			ctx.ui.notify(
+				`pi-herdr-subagents: deny-tools pattern(s) matched no tools: ${unmatchedDeny.join(", ")}`,
+				"warning",
+			);
+		}
+
 		// Registry race: pi resolves duplicate tool names first-loaded-wins,
 		// silently. If another extension's `subagent` tool won, warn visibly —
 		// never fail silently. sourceInfo.path is preferred; when it is
