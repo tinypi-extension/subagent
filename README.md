@@ -1,4 +1,5 @@
 # Subagent
+> Project archived. Use new extension [tinysubagent](https://github.com/tinypi-extension/tinysubagent)
 
 A [Pi](https://pi.dev) coding-agent extension that spawns isolated `pi` subprocesses — one per delegated task — so each subagent runs in a **fully isolated context window**. It registers a single tool named `subagent`.
 
